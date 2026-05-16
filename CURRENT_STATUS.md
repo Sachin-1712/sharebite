@@ -522,9 +522,59 @@ Verification:
 - `npm run seed:demo` was run again after the smoke test to restore the Bangalore baseline.
 - `npm run build` passed.
 
+## NGO Donor Review System
+
+NGOs can now rate donors after delivered donations, and donor/NGO dashboards are wired to show donor trust signals from `donor_reviews`.
+
+Migration status:
+
+- Added migration SQL at `supabase/migrations/20260516_add_donor_reviews.sql`.
+- Supabase is reachable, but this resumed workspace only has the anon key.
+- Automatic DDL could not be applied:
+  - `public.donor_reviews` currently returns `PGRST205`.
+  - `exec_sql` RPC is not available through the anon key.
+- Manual SQL Editor application is required before reviews can persist in the live Supabase project.
+- Exact SQL is documented in `DEMO_SEEDING.md`.
+
+Changes:
+
+- Added `DonorReview` and `DonorRatingSummary` app types.
+- Added store helpers to:
+  - read reviews by donation
+  - read donor rating summaries
+  - create donor reviews
+  - gracefully return empty review data when the table is not applied yet
+- Added `/api/reviews` with server-side rules:
+  - only NGO users can create reviews
+  - NGO can review only donations accepted by that NGO
+  - only delivered donations can be reviewed
+  - one review per donation
+  - rating must be 1-5
+- Added NGO History/detail review UI:
+  - `Rate Donor`
+  - 1-5 star rating
+  - short comment
+  - optional tags: Fresh food, Good packaging, Easy pickup, On-time, Needs improvement
+  - reviewed donations show `Reviewed` and rating
+- Added donor dashboard rating summary with average rating, review count, and recent NGO feedback.
+- Added donor trust signal to NGO donation cards/details:
+  - `4.5 star donor rating` when reviews exist
+  - `New donor` when no reviews exist
+- Added optional seed rows for Asha Rao / Koramangala Kitchen delivered donations once the migration exists.
+
+Verification:
+
+- `npm run seed:demo` passed and skipped only `donor_reviews` with a migration warning because the table is missing.
+- API test as NGO against an in-transit donation returned `409`: `Donor reviews are only available after delivery`.
+- API test as NGO against a delivered donation reached the persistence layer and returned the expected setup error because `donor_reviews` is not applied yet.
+- Donor dashboard returned HTTP 200 with the review summary fallback.
+- NGO dashboard returned HTTP 200 with the donor trust fallback.
+- `npm run build` passed.
+
 ## Known Remaining Issues
 
 - `npm run lint` still has pre-existing lint failures and was not made a Phase 1 blocker.
 - One pre-existing inconsistent live demo row remains quarantined/documented instead of deleted.
 - Supabase Storage bucket creation still requires service-role/admin setup; the app keeps the Phase 6 small-image fallback.
 - Donor source columns still require manual Supabase SQL Editor migration unless a service role key or database URL is added locally.
+- Donor reviews require manual Supabase SQL Editor migration unless a service role key or database URL is added locally.

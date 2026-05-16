@@ -562,3 +562,54 @@ npm run build
 ```
 
 Result: Passed on 2026-05-16.
+
+## NGO Donor Review System Test
+
+Purpose: verify NGO donor review rules, donor rating surfaces, and migration behavior.
+
+Setup:
+
+```bash
+npm run seed:demo
+```
+
+Result: Passed with migration caveat. The current Supabase environment does not yet have `public.donor_reviews`, so the seed script skipped only donor review rows and kept the rest of the demo data intact.
+
+Migration check:
+
+- Supabase was reachable.
+- `public.donor_reviews` returned `PGRST205`.
+- `exec_sql` RPC was unavailable through the anon key.
+- Manual SQL from `supabase/migrations/20260516_add_donor_reviews.sql` must be run in Supabase SQL Editor before delivered reviews can persist.
+
+Validated checks:
+
+- NGO review API blocks non-delivered donations:
+  - Donation: `12 Juice Bottles`
+  - Result: `409`
+  - Error: `Donor reviews are only available after delivery`
+- NGO review API reaches the persistence layer for a valid delivered donation:
+  - Donation: `42 Curd Rice Meal Cups`
+  - Result in current environment: setup error because `donor_reviews` is not applied yet
+- Donor dashboard returned HTTP 200 and showed the review summary fallback.
+- NGO dashboard returned HTTP 200 and showed donor trust fallback (`New donor`) when no reviews are available.
+- Duplicate-review blocking is implemented through the API and the `unique (donation_id)` migration constraint, but full duplicate persistence testing requires applying the migration first.
+
+After applying the migration:
+
+1. Run `npm run seed:demo`.
+2. Log in as NGO `ngo@sharebite.demo / demo123`.
+3. Open NGO Dashboard -> History.
+4. Open a delivered donation that has not been reviewed.
+5. Click `Rate Donor`, select stars/tags, and submit.
+6. Confirm the same donation changes to `Reviewed`.
+7. Log in as donor `donor@sharebite.demo / demo123`.
+8. Confirm the donor rating summary shows the seeded Asha Rao feedback.
+
+Build check:
+
+```bash
+npm run build
+```
+
+Result: Passed on 2026-05-16.

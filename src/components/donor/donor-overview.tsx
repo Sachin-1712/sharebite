@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { StatusBadge } from '@/components/shared/status-badge';
-import { Donation, AnalyticsSnapshot } from '@/types';
+import { Donation, AnalyticsSnapshot, DonorRatingSummary } from '@/types';
 import { toast } from 'sonner';
 import { uploadDonationPhoto } from '@/lib/photo-upload';
 import { combineLocalDateAndTime, splitISOToLocalDateTime, validatePreparedAt } from '@/lib/food-safety';
@@ -45,6 +45,8 @@ import {
   Trash2,
   Loader2,
   ImagePlus,
+  Star,
+  MessageSquareText,
 } from 'lucide-react';
 import {
   BarChart,
@@ -68,6 +70,7 @@ interface DonorOverviewProps {
   recentDonations: Donation[];
   analytics?: AnalyticsSnapshot[];
   donorName: string;
+  ratingSummary?: DonorRatingSummary;
 }
 
 const editableStatuses = ['open', 'accepted', 'pickup_assigned'];
@@ -210,7 +213,7 @@ const KPICard = ({
   </Card>
 );
 
-export function DonorOverview({ stats, recentDonations, analytics = [], donorName }: DonorOverviewProps) {
+export function DonorOverview({ stats, recentDonations, analytics = [], donorName, ratingSummary }: DonorOverviewProps) {
   const router = useRouter();
   const firstName = donorName.split(' ')[0];
   const [editingDonation, setEditingDonation] = useState<Donation | null>(null);
@@ -408,6 +411,55 @@ export function DonorOverview({ stats, recentDonations, analytics = [], donorNam
         <KPICard label="Impact Points" value={stats.impactScore.toLocaleString()} subtitle="Community Score" icon={Heart} color="bg-rose-500" />
         <KPICard label="Partnerships" value={stats.ngosHelped.toString()} subtitle="Local NGOs Supported" icon={TrendingUp} color="bg-amber-600" />
       </div>
+
+      <Card className="bg-white border-fb-outline-variant/10 shadow-sm rounded-[2rem] overflow-hidden">
+        <CardContent className="grid gap-5 p-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-center">
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-700">
+              <Star className="h-6 w-6 fill-current" />
+            </div>
+            <div>
+              <p className="text-[10px] font-black uppercase tracking-widest text-fb-on-surface-variant/50">Donor Rating</p>
+              <div className="mt-1 flex items-baseline gap-2">
+                <p className="text-3xl font-black text-fb-on-surface">
+                  {ratingSummary && ratingSummary.reviewCount > 0 ? ratingSummary.averageRating.toFixed(1) : '--'}
+                </p>
+                <p className="text-xs font-black uppercase tracking-widest text-fb-on-surface-variant">
+                  {ratingSummary?.reviewCount || 0} reviews
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {ratingSummary && ratingSummary.reviewCount > 0 ? (
+            <div className="grid gap-3 md:grid-cols-3">
+              {ratingSummary.recentReviews.map((review) => (
+                <div key={review.id} className="rounded-2xl bg-fb-surface-container-low p-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1 text-amber-700">
+                      <Star className="h-3.5 w-3.5 fill-current" />
+                      <span className="text-xs font-black">{review.rating}/5</span>
+                    </div>
+                    <span className="truncate text-[8px] font-black uppercase tracking-widest text-fb-on-surface-variant/40">
+                      {review.ngoName || 'NGO'}
+                    </span>
+                  </div>
+                  <p className="mt-2 line-clamp-2 text-xs font-semibold leading-relaxed text-fb-on-surface-variant">
+                    {review.comment || (review.tags.length > 0 ? review.tags.join(', ') : 'Positive donor experience.')}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 rounded-2xl bg-fb-surface-container-low p-4">
+              <MessageSquareText className="h-5 w-5 text-fb-on-surface-variant/40" />
+              <p className="text-xs font-bold text-fb-on-surface-variant">
+                NGO feedback will appear here after delivered donations are reviewed.
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Main Content Bento */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

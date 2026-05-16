@@ -10,6 +10,14 @@ Status key:
 
 ## Requested Changes
 
+- [~] NGO donor review system
+  - Added migration SQL for `donor_reviews`.
+  - Added NGO-only review API rules for delivered donations.
+  - NGO History/detail UI can rate donors and show reviewed status.
+  - Donor dashboard can show average rating and recent NGO feedback.
+  - NGO marketplace/details show donor trust signal.
+  - Current Supabase environment still needs the manual SQL migration before reviews persist.
+
 - [x] Food cooked/prepared date safety validation
   - Donor create/edit flows now require cooked/prepared date and time.
   - Backend validation blocks food prepared more than 24 hours ago or in the future.

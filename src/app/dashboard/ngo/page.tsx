@@ -1,6 +1,13 @@
 import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import { getNGOStats, getOpenDonations, getDonationsByNGO, getMatchesForNGO, getMatchesForDonation } from '@/lib/store';
+import {
+  getNGOStats,
+  getOpenDonations,
+  getDonationsByNGO,
+  getMatchesForDonation,
+  getReviewsByDonationIds,
+  getDonorRatingSummaries,
+} from '@/lib/store';
 import { NGODashboard } from '@/components/ngo/ngo-dashboard';
 import { RevalidationTimer } from '@/components/shared/revalidation-timer';
 
@@ -14,6 +21,10 @@ export default async function NGOPage() {
   const stats = await getNGOStats(user.id);
   const openDonations = await getOpenDonations();
   const acceptedDonations = await getDonationsByNGO(user.id);
+  const allVisibleDonations = [...openDonations, ...acceptedDonations];
+  const reviewRows = await getReviewsByDonationIds(acceptedDonations.map((donation) => donation.id));
+  const donationReviews = Object.fromEntries(reviewRows.map((review) => [review.donationId, review]));
+  const donorRatings = await getDonorRatingSummaries(allVisibleDonations.map((donation) => donation.donorId));
   
   // Enrich open donations with match scores for this NGO
   const enrichedDonations = await Promise.all(openDonations.map(async (d) => {
@@ -23,7 +34,14 @@ export default async function NGOPage() {
       ...d,
       matchScore: ngoMatch?.score,
       matchReason: ngoMatch?.reason,
+      donorRating: donorRatings[d.donorId],
     };
+  }));
+
+  const enrichedAcceptedDonations = acceptedDonations.map((donation) => ({
+    ...donation,
+    donorRating: donorRatings[donation.donorId],
+    donorReview: donationReviews[donation.id],
   }));
 
   return (
@@ -31,7 +49,7 @@ export default async function NGOPage() {
       <NGODashboard
         stats={stats}
         openDonations={enrichedDonations}
-        acceptedDonations={acceptedDonations}
+        acceptedDonations={enrichedAcceptedDonations}
         ngoName={user.organizationName}
       />
       <RevalidationTimer intervalMs={10000} />

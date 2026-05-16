@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Select,
@@ -21,7 +23,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { StatusBadge, UrgencyBadge } from '@/components/shared/status-badge';
-import { Donation } from '@/types';
+import { Donation, DonorRatingSummary, DonorReview } from '@/types';
 import { DONOR_TYPE_LABELS } from '@/lib/donation-source';
 import { toast } from 'sonner';
 import {
@@ -41,6 +43,8 @@ import {
   ChevronRight,
   Search,
   Loader2,
+  Star,
+  MessageSquareText,
 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
@@ -48,6 +52,8 @@ import { cn } from '@/lib/utils';
 interface EnrichedDonation extends Donation {
   matchScore?: number;
   matchReason?: string;
+  donorRating?: DonorRatingSummary;
+  donorReview?: DonorReview;
 }
 
 interface NGODashboardProps {
@@ -59,7 +65,7 @@ interface NGODashboardProps {
     topDonorType: string;
   };
   openDonations: EnrichedDonation[];
-  acceptedDonations: Donation[];
+  acceptedDonations: EnrichedDonation[];
   ngoName: string;
 }
 
@@ -72,6 +78,14 @@ const categoryLabels: Record<string, string> = {
   beverages: 'Beverages',
   other: 'Other',
 };
+
+const reviewTags = ['Fresh food', 'Good packaging', 'Easy pickup', 'On-time', 'Needs improvement'];
+
+const formatDonorRating = (summary?: DonorRatingSummary) => (
+  summary && summary.reviewCount > 0
+    ? `${summary.averageRating.toFixed(1)} ★ donor rating`
+    : 'New donor'
+);
 
 const KPICard = ({ label, value, subtitle, icon: Icon, color = "text-fb-primary" }: { label: string, value: string, subtitle: string, icon: any, color?: string }) => (
   <Card className="bg-white border-fb-outline-variant/10 shadow-sm rounded-[2rem] overflow-hidden group hover:shadow-md transition-all duration-500">
@@ -100,9 +114,14 @@ const KPICard = ({ label, value, subtitle, icon: Icon, color = "text-fb-primary"
 export function NGODashboard({ stats, openDonations, acceptedDonations, ngoName }: NGODashboardProps) {
   const router = useRouter();
   const [selectedDonation, setSelectedDonation] = useState<EnrichedDonation | null>(null);
+  const [reviewDonation, setReviewDonation] = useState<EnrichedDonation | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [urgencyFilter, setUrgencyFilter] = useState('all');
   const [loading, setLoading] = useState<string | null>(null);
+  const [reviewSaving, setReviewSaving] = useState(false);
 
   const filteredDonations = openDonations.filter((d) => {
     if (categoryFilter !== 'all' && d.category !== categoryFilter) return false;
@@ -136,6 +155,52 @@ export function NGODashboard({ stats, openDonations, acceptedDonations, ngoName 
       toast.error('Network error');
     } finally {
       setLoading(null);
+    }
+  };
+
+  const openReviewDialog = (donation: EnrichedDonation) => {
+    setReviewDonation(donation);
+    setSelectedDonation(null);
+    setReviewRating(5);
+    setReviewComment('');
+    setSelectedTags([]);
+  };
+
+  const toggleReviewTag = (tag: string) => {
+    setSelectedTags((prev) => (
+      prev.includes(tag) ? prev.filter((item) => item !== tag) : [...prev, tag]
+    ));
+  };
+
+  const handleSubmitReview = async () => {
+    if (!reviewDonation) return;
+    setReviewSaving(true);
+
+    try {
+      const res = await fetch('/api/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          donationId: reviewDonation.id,
+          rating: reviewRating,
+          comment: reviewComment,
+          tags: selectedTags,
+        }),
+      });
+
+      const data = await res.json().catch(() => null);
+
+      if (res.ok) {
+        toast.success('Donor review saved');
+        setReviewDonation(null);
+        router.refresh();
+      } else {
+        toast.error(data?.error || 'Unable to save review');
+      }
+    } catch {
+      toast.error('Network error');
+    } finally {
+      setReviewSaving(false);
     }
   };
 
@@ -340,6 +405,7 @@ export function NGODashboard({ stats, openDonations, acceptedDonations, ngoName 
                   <DetailItem label="Food Type" value={selectedDonation.foodType || categoryLabels[selectedDonation.category]} icon={Utensils} />
                   <DetailItem label="Pickup Location" value={selectedDonation.locationName} icon={MapPin} />
                   <DetailItem label="Donor Type" value={DONOR_TYPE_LABELS[selectedDonation.donorType || 'restaurant_business']} icon={Building2} />
+                  <DetailItem label="Donor Rating" value={formatDonorRating(selectedDonation.donorRating)} icon={Star} />
                   {selectedDonation.foodSourceName && (
                     <DetailItem label="Food Source" value={selectedDonation.foodSourceName} icon={Building2} />
                   )}
@@ -393,6 +459,20 @@ export function NGODashboard({ stats, openDonations, acceptedDonations, ngoName 
                   )}
                 </div>
 
+                {selectedDonation.donorReview && (
+                  <div className="rounded-[2rem] border border-amber-500/10 bg-amber-500/5 p-5">
+                    <div className="flex items-center gap-2 text-amber-700">
+                      <Star className="h-4 w-4 fill-current" />
+                      <span className="text-[10px] font-black uppercase tracking-widest">Reviewed · {selectedDonation.donorReview.rating}/5</span>
+                    </div>
+                    {selectedDonation.donorReview.comment && (
+                      <p className="mt-2 text-sm font-semibold leading-relaxed text-fb-on-surface-variant">
+                        {selectedDonation.donorReview.comment}
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex gap-4 pt-6">
                   <Button
                     variant="outline"
@@ -401,22 +481,137 @@ export function NGODashboard({ stats, openDonations, acceptedDonations, ngoName 
                   >
                     Close
                   </Button>
-                  <Button
-                    className="h-16 flex-1 rounded-[1.5rem] bg-[#0f5238] text-white hover:bg-[#1b4332] shadow-ambient-3 active:scale-[0.98] transition-all text-xs font-black uppercase tracking-widest gap-3"
-                    onClick={() => handleAccept(selectedDonation.id)}
-                    disabled={loading === selectedDonation.id}
-                  >
-                    {loading === selectedDonation.id ? (
-                      <Loader2 className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <>
-                        Accept Donation
-                        <ArrowUpRight className="w-5 h-5" />
-                      </>
-                    )}
-                  </Button>
+                  {['open', 'matched'].includes(selectedDonation.status) && (
+                    <Button
+                      className="h-16 flex-1 rounded-[1.5rem] bg-[#0f5238] text-white hover:bg-[#1b4332] shadow-ambient-3 active:scale-[0.98] transition-all text-xs font-black uppercase tracking-widest gap-3"
+                      onClick={() => handleAccept(selectedDonation.id)}
+                      disabled={loading === selectedDonation.id}
+                    >
+                      {loading === selectedDonation.id ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <>
+                          Accept Donation
+                          <ArrowUpRight className="w-5 h-5" />
+                        </>
+                      )}
+                    </Button>
+                  )}
+                  {selectedDonation.status === 'delivered' && !selectedDonation.donorReview && (
+                    <Button
+                      className="h-16 flex-1 rounded-[1.5rem] bg-[#0f5238] text-white hover:bg-[#1b4332] shadow-ambient-3 active:scale-[0.98] transition-all text-xs font-black uppercase tracking-widest gap-3"
+                      onClick={() => openReviewDialog(selectedDonation)}
+                    >
+                      <Star className="w-5 h-5" />
+                      Rate Donor
+                    </Button>
+                  )}
+                  {selectedDonation.status === 'delivered' && selectedDonation.donorReview && (
+                    <Button
+                      className="h-16 flex-1 rounded-[1.5rem] bg-fb-surface-container text-fb-primary hover:bg-fb-surface-container text-xs font-black uppercase tracking-widest gap-3"
+                      disabled
+                    >
+                      <CheckCircle2 className="w-5 h-5" />
+                      Reviewed
+                    </Button>
+                  )}
                 </div>
               </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!reviewDonation} onOpenChange={(open) => !open && setReviewDonation(null)}>
+        <DialogContent className="max-w-xl rounded-[2rem] border-none bg-white p-0 shadow-2xl">
+          <DialogHeader className="border-b border-fb-outline-variant/10 p-6">
+            <DialogTitle className="text-xl font-black text-fb-on-surface">Rate Donor</DialogTitle>
+            <DialogDescription>
+              Review the donor after a delivered donation. This helps NGOs see trusted donor history.
+            </DialogDescription>
+          </DialogHeader>
+
+          {reviewDonation && (
+            <div className="space-y-6 p-6">
+              <div className="rounded-2xl bg-fb-surface-container-low p-4">
+                <p className="text-sm font-black text-fb-on-surface">{reviewDonation.title}</p>
+                <p className="mt-1 text-xs font-bold text-fb-on-surface-variant">{reviewDonation.quantity} {reviewDonation.unit} · {reviewDonation.locationName}</p>
+              </div>
+
+              <div className="space-y-3">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-fb-on-surface-variant/60">Rating</Label>
+                <div className="flex gap-2">
+                  {[1, 2, 3, 4, 5].map((rating) => (
+                    <button
+                      key={rating}
+                      type="button"
+                      onClick={() => setReviewRating(rating)}
+                      className={cn(
+                        'flex h-12 w-12 items-center justify-center rounded-2xl border transition-all',
+                        rating <= reviewRating
+                          ? 'border-amber-400 bg-amber-100 text-amber-700'
+                          : 'border-fb-outline-variant/10 bg-fb-surface-container-low text-fb-on-surface-variant/30'
+                      )}
+                      aria-label={`${rating} star rating`}
+                    >
+                      <Star className="h-5 w-5 fill-current" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-fb-on-surface-variant/60">Tags</Label>
+                <div className="flex flex-wrap gap-2">
+                  {reviewTags.map((tag) => (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => toggleReviewTag(tag)}
+                      className={cn(
+                        'rounded-full px-3 py-2 text-[10px] font-black uppercase tracking-widest transition-all',
+                        selectedTags.includes(tag)
+                          ? 'bg-fb-primary text-white'
+                          : 'bg-fb-surface-container-low text-fb-on-surface-variant hover:bg-fb-surface-container'
+                      )}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-fb-on-surface-variant/60">Short Comment</Label>
+                <Textarea
+                  value={reviewComment}
+                  onChange={(event) => setReviewComment(event.target.value)}
+                  rows={4}
+                  maxLength={240}
+                  placeholder="Fresh food, packed neatly, and pickup was smooth."
+                  className="rounded-[1.5rem] bg-fb-surface-container-low font-medium"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-12 flex-1 rounded-2xl"
+                  onClick={() => setReviewDonation(null)}
+                  disabled={reviewSaving}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  className="h-12 flex-1 rounded-2xl bg-fb-primary text-white"
+                  onClick={handleSubmitReview}
+                  disabled={reviewSaving}
+                >
+                  {reviewSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Submit Review'}
+                </Button>
               </div>
             </div>
           )}
@@ -453,6 +648,14 @@ function DonationCard({ donation, onClick }: { donation: EnrichedDonation; onCli
             <span className="text-[10px] font-black text-fb-primary">{donation.matchScore || 85}%</span>
           </div>
         </div>
+        {donation.status === 'delivered' && (
+          <div className="mb-4 flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-2 text-emerald-700">
+            {donation.donorReview ? <CheckCircle2 className="h-3.5 w-3.5" /> : <MessageSquareText className="h-3.5 w-3.5" />}
+            <span className="text-[9px] font-black uppercase tracking-widest">
+              {donation.donorReview ? `Reviewed · ${donation.donorReview.rating}/5` : 'Rate Donor'}
+            </span>
+          </div>
+        )}
 
         <h3 className={cn(
           "text-lg font-black text-fb-on-surface tracking-tight leading-[1.2] mb-4 break-words transition-colors",
@@ -486,6 +689,10 @@ function DonationCard({ donation, onClick }: { donation: EnrichedDonation; onCli
             <p className="mt-1 line-clamp-1 break-words text-[11px] font-black text-fb-on-surface">{donation.foodSourceName}</p>
           </div>
         )}
+        <div className="mb-5 flex items-center gap-2 rounded-2xl border border-amber-500/10 bg-amber-500/5 p-3 text-amber-700">
+          <Star className="h-3.5 w-3.5 fill-current" />
+          <span className="text-[10px] font-black uppercase tracking-widest">{formatDonorRating(donation.donorRating)}</span>
+        </div>
 
         <div className="flex items-center justify-between pt-6 border-t border-fb-outline-variant/5 mt-auto">
           <div className="flex items-start gap-2 min-w-0">

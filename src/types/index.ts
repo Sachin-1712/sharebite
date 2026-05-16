@@ -94,6 +94,26 @@ export interface MatchSuggestion {
   rank: number;
 }
 
+export interface DonorReview {
+  id: string;
+  donationId: string;
+  donorId: string;
+  ngoId: string;
+  rating: number;
+  comment?: string;
+  tags: string[];
+  createdAt: string;
+  ngoName?: string;
+  donationTitle?: string;
+}
+
+export interface DonorRatingSummary {
+  donorId: string;
+  averageRating: number;
+  reviewCount: number;
+  recentReviews: DonorReview[];
+}
+
 export interface DeliveryJob {
   id: string;
   donationId: string;

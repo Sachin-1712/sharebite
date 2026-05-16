@@ -4,6 +4,8 @@ import {
   NGOProfile,
   Donation,
   MatchSuggestion,
+  DonorReview,
+  DonorRatingSummary,
   DeliveryJob,
   AnalyticsSnapshot,
   FoodCategory,
@@ -61,6 +63,13 @@ const isMissingSourceColumnError = (error: any) => (
   error?.code === 'PGRST204' ||
   error?.message?.includes('donor_type') ||
   error?.message?.includes('food_source_name')
+);
+
+const isMissingDonorReviewsTableError = (error: any) => (
+  error?.code === '42P01' ||
+  error?.code === 'PGRST205' ||
+  error?.message?.includes('donor_reviews') ||
+  error?.details?.includes('donor_reviews')
 );
 
 const mapUser = (row: any): User => ({
@@ -129,6 +138,36 @@ const mapMatch = (row: any): MatchSuggestion => ({
   score: row.score,
   reason: row.reason,
   rank: row.rank,
+});
+
+const parseTags = (value: unknown): string[] => {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string');
+  }
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+    } catch {
+      return value ? [value] : [];
+    }
+  }
+
+  return [];
+};
+
+const mapDonorReview = (row: any): DonorReview => ({
+  id: row.id,
+  donationId: row.donation_id,
+  donorId: row.donor_id,
+  ngoId: row.ngo_id,
+  rating: row.rating,
+  comment: row.comment || undefined,
+  tags: parseTags(row.tags),
+  createdAt: row.created_at,
+  ngoName: row.ngo?.organization_name || row.ngo?.name || undefined,
+  donationTitle: row.donation?.title || undefined,
 });
 
 const mapNGO = (row: any): NGOProfile => ({
@@ -331,6 +370,120 @@ export async function createMatchSuggestion(match: MatchSuggestion): Promise<voi
 }
 
 // ─── Delivery Jobs ─────────────────────────────────────────
+// Donor Reviews
+export async function getReviewsByDonationIds(donationIds: string[]): Promise<DonorReview[]> {
+  if (donationIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('donor_reviews')
+    .select('*, ngo:profiles!donor_reviews_ngo_id_fkey(name, organization_name)')
+    .in('donation_id', donationIds)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    if (isMissingDonorReviewsTableError(error)) return [];
+    throw error;
+  }
+
+  return (data || []).map(mapDonorReview);
+}
+
+export async function getReviewByDonationId(donationId: string): Promise<DonorReview | undefined> {
+  const reviews = await getReviewsByDonationIds([donationId]);
+  return reviews[0];
+}
+
+export async function getReviewsByDonor(donorId: string): Promise<DonorReview[]> {
+  const { data, error } = await supabase
+    .from('donor_reviews')
+    .select('*, ngo:profiles!donor_reviews_ngo_id_fkey(name, organization_name), donation:donations(title)')
+    .eq('donor_id', donorId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    if (isMissingDonorReviewsTableError(error)) return [];
+    throw error;
+  }
+
+  return (data || []).map(mapDonorReview);
+}
+
+export async function getReviewsByDonorIds(donorIds: string[]): Promise<DonorReview[]> {
+  if (donorIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('donor_reviews')
+    .select('*, ngo:profiles!donor_reviews_ngo_id_fkey(name, organization_name)')
+    .in('donor_id', donorIds)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    if (isMissingDonorReviewsTableError(error)) return [];
+    throw error;
+  }
+
+  return (data || []).map(mapDonorReview);
+}
+
+export async function getDonorRatingSummary(donorId: string): Promise<DonorRatingSummary> {
+  const reviews = await getReviewsByDonor(donorId);
+  const averageRating = reviews.length
+    ? Math.round((reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length) * 10) / 10
+    : 0;
+
+  return {
+    donorId,
+    averageRating,
+    reviewCount: reviews.length,
+    recentReviews: reviews.slice(0, 3),
+  };
+}
+
+export async function getDonorRatingSummaries(donorIds: string[]): Promise<Record<string, DonorRatingSummary>> {
+  const uniqueIds = Array.from(new Set(donorIds.filter(Boolean)));
+  const reviews = await getReviewsByDonorIds(uniqueIds);
+
+  return uniqueIds.reduce<Record<string, DonorRatingSummary>>((acc, donorId) => {
+    const donorReviews = reviews.filter((review) => review.donorId === donorId);
+    const averageRating = donorReviews.length
+      ? Math.round((donorReviews.reduce((sum, review) => sum + review.rating, 0) / donorReviews.length) * 10) / 10
+      : 0;
+
+    acc[donorId] = {
+      donorId,
+      averageRating,
+      reviewCount: donorReviews.length,
+      recentReviews: donorReviews.slice(0, 3),
+    };
+    return acc;
+  }, {});
+}
+
+export async function createDonorReview(review: DonorReview): Promise<DonorReview> {
+  const { data, error } = await supabase
+    .from('donor_reviews')
+    .insert([{
+      ...(review.id ? { id: review.id } : {}),
+      donation_id: review.donationId,
+      donor_id: review.donorId,
+      ngo_id: review.ngoId,
+      rating: review.rating,
+      comment: review.comment || null,
+      tags: review.tags || [],
+    }])
+    .select()
+    .single();
+
+  if (error) {
+    if (isMissingDonorReviewsTableError(error)) {
+      throw new Error('Donor reviews table is not set up yet. Apply supabase/migrations/20260516_add_donor_reviews.sql in Supabase.');
+    }
+    throw error;
+  }
+
+  return mapDonorReview(data);
+}
+
 export async function getJobsByDeliveryPartner(partnerId: string): Promise<DeliveryJob[]> {
   const { data } = await supabase.from('delivery_jobs').select('*').eq('delivery_partner_id', partnerId).order('created_at', { ascending: false });
   return (data || []).map(mapJob);

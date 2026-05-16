@@ -1,6 +1,6 @@
 import { getSession } from '@/lib/auth';
 import { redirect } from 'next/navigation';
-import { getDonorStats, getDonationsByDonor } from '@/lib/store';
+import { getDonorRatingSummary, getDonorStats, getDonationsByDonor } from '@/lib/store';
 import { DonorOverview } from '@/components/donor/donor-overview';
 import { RevalidationTimer } from '@/components/shared/revalidation-timer';
 
@@ -13,10 +13,11 @@ export default async function DonorDashboard() {
 
   const stats = await getDonorStats(user.id);
   const donations = await getDonationsByDonor(user.id);
+  const ratingSummary = await getDonorRatingSummary(user.id);
 
   return (
     <>
-      <DonorOverview stats={stats} recentDonations={donations} donorName={user.name} />
+      <DonorOverview stats={stats} recentDonations={donations} donorName={user.name} ratingSummary={ratingSummary} />
       <RevalidationTimer intervalMs={10000} />
     </>
   );

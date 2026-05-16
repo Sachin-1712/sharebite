@@ -46,6 +46,46 @@ comment on column public.donations.food_source_name is
   'For individual donors, where the food was bought from.';
 ```
 
+The NGO donor review system adds a second migration at `supabase/migrations/20260516_add_donor_reviews.sql`.
+
+On 2026-05-16, the live Supabase project returned `PGRST205` for `public.donor_reviews`, and the `exec_sql` RPC was not available through the anon key. The migration therefore needs to be run manually in Supabase SQL Editor before review rows can persist.
+
+Manual SQL:
+
+```sql
+create table if not exists public.donor_reviews (
+  id uuid primary key default gen_random_uuid(),
+  donation_id uuid not null references public.donations(id) on delete cascade,
+  donor_id uuid not null references public.profiles(id) on delete cascade,
+  ngo_id uuid not null references public.profiles(id) on delete cascade,
+  rating integer not null check (rating between 1 and 5),
+  comment text,
+  tags text[] not null default '{}',
+  created_at timestamptz not null default now(),
+  constraint donor_reviews_one_per_donation unique (donation_id)
+);
+
+create index if not exists donor_reviews_donor_id_idx
+  on public.donor_reviews (donor_id);
+
+create index if not exists donor_reviews_ngo_id_idx
+  on public.donor_reviews (ngo_id);
+
+comment on table public.donor_reviews is
+  'NGO reviews of donors after delivered donations.';
+
+comment on column public.donor_reviews.tags is
+  'Optional NGO feedback tags such as Fresh food, Good packaging, Easy pickup, On-time, or Needs improvement.';
+```
+
+After applying this migration, rerun:
+
+```bash
+npm run seed:demo
+```
+
+The seed script will then insert two Asha Rao / Koramangala Kitchen donor reviews.
+
 ## What The Script Resets
 
 The script deletes demo-only rows connected to known demo profile ids, seeded donation ids, seeded NGO ids, seeded delivery ids, or Phase 1 workflow test donations. It resets these tables in dependency order:
@@ -132,6 +172,19 @@ Feature 2 adds migration SQL for `donations.donor_type` and `donations.food_sour
 
 Several seeded donations include safe sample `photo_url` values so the donor, NGO, and delivery cards can demonstrate photo rendering even when Supabase Storage bucket creation is unavailable in the current anon-key environment.
 
+## Seeded Donor Reviews
+
+These rows are seeded only after `public.donor_reviews` exists:
+
+- `42 Curd Rice Meal Cups` reviewed by Bengaluru Food Relief Trust: 5 stars, tags `Fresh food`, `Good packaging`, `Easy pickup`
+- `20 Millet Upma Breakfast Boxes` reviewed by Annadaan Bengaluru: 4 stars, tags `Good packaging`, `On-time`
+
+Expected Asha Rao donor rating after the migration and reseed:
+
+- Average rating: 4.5
+- Review count: 2
+- Recent feedback from Bengaluru Food Relief Trust and Annadaan Bengaluru
+
 ## Expected Dashboard Data
 
 Donor dashboard:
@@ -142,6 +195,7 @@ Donor dashboard:
   - Meals Rescued / Food Shared: 62
   - Impact Points / Community Score: 80
   - Partnerships / Local NGOs Supported: 2
+  - Donor Rating: 4.5 from 2 reviews after the donor reviews migration is applied
 - Additional donor rows keep the NGO marketplace and donation zones active across JP Nagar, Marathahalli, Hebbal, Whitefield, and Koramangala.
 
 NGO marketplace:
@@ -187,4 +241,5 @@ After the donor dashboard polish reseed, the script creates:
 - 17 donations
 - 14 match suggestions
 - 6 delivery jobs
+- 2 donor reviews, when `public.donor_reviews` exists
 - 42 analytics snapshots

@@ -864,6 +864,29 @@ const seedDeliveryJobs = [
   },
 ];
 
+const seedDonorReviews = [
+  {
+    id: '51515151-1111-4444-8888-aaaaaaaaaaaa',
+    donation_id: donationIds.ashaCurdRice,
+    donor_id: ids.donors.koramangala,
+    ngo_id: ids.ngos.reliefTrust,
+    rating: 5,
+    comment: 'Fresh curd rice cups, packed neatly, and pickup from Koramangala was easy.',
+    tags: ['Fresh food', 'Good packaging', 'Easy pickup'],
+    created_at: hoursAgo(6),
+  },
+  {
+    id: '62626262-2222-4444-8888-bbbbbbbbbbbb',
+    donation_id: donationIds.ashaUpmaBoxes,
+    donor_id: ids.donors.koramangala,
+    ngo_id: ids.ngos.annadaan,
+    rating: 4,
+    comment: 'Good breakfast boxes and clear pickup instructions. A little earlier notice would help.',
+    tags: ['Good packaging', 'On-time'],
+    created_at: hoursAgo(15),
+  },
+];
+
 const analyticsProfiles = [
   { ngoId: ids.ngos.reliefTrust, offset: 0, summary: 'Bangalore demo data: Koramangala, JP Nagar, and Malleshwaram are active donation areas this week.' },
   { ngoId: ids.ngos.communityMeals, offset: 1, summary: 'Bangalore demo data: Whitefield and Marathahalli are creating strong office lunch demand.' },
@@ -887,6 +910,16 @@ const seedAnalytics = analyticsProfiles.flatMap((profile, profileIndex) => {
 async function deleteByIds(table, column, values) {
   if (!values.length) return;
   const { error } = await supabase.from(table).delete().in(column, values);
+  if (error) throw new Error(`Failed deleting ${table}: ${error.message}`);
+}
+
+async function deleteOptionalByIds(table, column, values) {
+  if (!values.length) return;
+  const { error } = await supabase.from(table).delete().in(column, values);
+  if (error?.message?.includes(table) || error?.code === '42P01' || error?.code === 'PGRST205') {
+    console.warn(`Skipped ${table} reset because the table is not available. Apply the matching migration to seed it.`);
+    return;
+  }
   if (error) throw new Error(`Failed deleting ${table}: ${error.message}`);
 }
 
@@ -922,6 +955,7 @@ async function resetDemoData() {
   const existingDonationIds = await getExistingDemoDonationIds();
   const existingJobIds = await getExistingDemoJobIds(existingDonationIds);
 
+  await deleteOptionalByIds('donor_reviews', 'donation_id', existingDonationIds);
   await deleteByIds('match_suggestions', 'donation_id', existingDonationIds);
   await deleteByIds('delivery_jobs', 'id', existingJobIds);
   await deleteByIds('analytics_snapshots', 'ngo_id', Object.values(ids.ngos));
@@ -936,6 +970,17 @@ async function upsert(table, rows) {
   console.log(`Seeded ${table}: ${rows.length}`);
 }
 
+async function optionalUpsert(table, rows) {
+  const { error } = await supabase.from(table).upsert(rows);
+  if (error?.message?.includes(table) || error?.code === '42P01' || error?.code === 'PGRST205') {
+    console.warn(`Skipped ${table}: apply the matching migration to seed these demo rows.`);
+    return false;
+  }
+  if (error) throw new Error(`Failed seeding ${table}: ${error.message}`);
+  console.log(`Seeded ${table}: ${rows.length}`);
+  return true;
+}
+
 async function seed() {
   await resetDemoData();
   await upsert('profiles', seedUsers);
@@ -943,6 +988,7 @@ async function seed() {
   await upsert('donations', seedDonations);
   await upsert('match_suggestions', seedMatchSuggestions);
   await upsert('delivery_jobs', seedDeliveryJobs);
+  await optionalUpsert('donor_reviews', seedDonorReviews);
   await upsert('analytics_snapshots', seedAnalytics);
   console.log('Bangalore demo reseed complete.');
 }
