@@ -16,6 +16,10 @@ create index if not exists donor_reviews_donor_id_idx
 create index if not exists donor_reviews_ngo_id_idx
   on public.donor_reviews (ngo_id);
 
+-- Disable RLS to match the pattern of other Sharebite tables
+-- (all access control is handled at the API route level)
+alter table public.donor_reviews disable row level security;
+
 comment on table public.donor_reviews is
   'NGO reviews of donors after delivered donations.';
 

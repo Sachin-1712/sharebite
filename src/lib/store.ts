@@ -67,10 +67,10 @@ const isMissingSourceColumnError = (error: any) => (
 
 const isMissingDonorReviewsTableError = (error: any) => (
   error?.code === '42P01' ||
-  error?.code === 'PGRST205' ||
-  error?.message?.includes('donor_reviews') ||
-  error?.details?.includes('donor_reviews')
+  error?.code === 'PGRST205'
 );
+
+const isRLSError = (error: any) => error?.code === '42501';
 
 const mapUser = (row: any): User => ({
   id: row.id,
@@ -381,6 +381,7 @@ export async function getReviewsByDonationIds(donationIds: string[]): Promise<Do
     .order('created_at', { ascending: false });
 
   if (error) {
+    console.error('[getReviewsByDonationIds] Supabase error:', { code: error.code, message: error.message, details: error.details, hint: error.hint });
     if (isMissingDonorReviewsTableError(error)) return [];
     throw error;
   }
@@ -401,6 +402,7 @@ export async function getReviewsByDonor(donorId: string): Promise<DonorReview[]>
     .order('created_at', { ascending: false });
 
   if (error) {
+    console.error('[getReviewsByDonor] Supabase error:', { code: error.code, message: error.message, details: error.details, hint: error.hint });
     if (isMissingDonorReviewsTableError(error)) return [];
     throw error;
   }
@@ -418,6 +420,7 @@ export async function getReviewsByDonorIds(donorIds: string[]): Promise<DonorRev
     .order('created_at', { ascending: false });
 
   if (error) {
+    console.error('[getReviewsByDonorIds] Supabase error:', { code: error.code, message: error.message, details: error.details, hint: error.hint });
     if (isMissingDonorReviewsTableError(error)) return [];
     throw error;
   }
@@ -475,8 +478,17 @@ export async function createDonorReview(review: DonorReview): Promise<DonorRevie
     .single();
 
   if (error) {
+    console.error('[createDonorReview] Supabase error:', {
+      code: error.code,
+      message: error.message,
+      details: error.details,
+      hint: error.hint,
+    });
     if (isMissingDonorReviewsTableError(error)) {
       throw new Error('Donor reviews table is not set up yet. Apply supabase/migrations/20260516_add_donor_reviews.sql in Supabase.');
+    }
+    if (isRLSError(error)) {
+      throw new Error('Donor reviews table exists but row-level security is blocking access. Run: ALTER TABLE public.donor_reviews DISABLE ROW LEVEL SECURITY;');
     }
     throw error;
   }
