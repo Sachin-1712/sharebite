@@ -1,6 +1,6 @@
 # Demo Seeding
 
-Last updated: 2026-05-05
+Last updated: 2026-05-16
 
 ## Purpose
 
@@ -20,7 +20,31 @@ This runs:
 node scripts/supabase-seed.js
 ```
 
-Verified on 2026-05-04: passed.
+Verified on 2026-05-16: passed.
+
+## Donation Source Migration
+
+The app includes migration SQL at `supabase/migrations/20260516_add_donation_source_fields.sql` for:
+
+- `donations.donor_type`
+- `donations.food_source_name`
+
+On 2026-05-16, Supabase was reachable from this workspace, but the environment only had the anon key. There was no service role key, database URL, or Supabase CLI access, so the migration could not be applied automatically. The live table still lacked these two physical columns at the time of this pass, and the app continued to use the existing fallback notes metadata safely.
+
+Run this SQL in the Supabase SQL Editor to apply the migration manually:
+
+```sql
+alter table public.donations
+  add column if not exists donor_type text not null default 'restaurant_business'
+    check (donor_type in ('restaurant_business', 'individual', 'event_organizer')),
+  add column if not exists food_source_name text;
+
+comment on column public.donations.donor_type is
+  'Demo donor source type: restaurant/business, individual, or event organizer.';
+
+comment on column public.donations.food_source_name is
+  'For individual donors, where the food was bought from.';
+```
 
 ## What The Script Resets
 
@@ -101,6 +125,8 @@ Feature 2 adds migration SQL for `donations.donor_type` and `donations.food_sour
 - `36 Office Snack Boxes` from Marathahalli Office Pantry: `open`, medium
 - `32 Hostel Dinner Trays` from Hebbal Hostel Mess: `pickup_assigned`, urgent
 - `24 Whole Wheat Bread Loaves` from Koramangala Kitchen: `open`, low
+- `42 Curd Rice Meal Cups` from Koramangala Kitchen: `delivered`
+- `20 Millet Upma Breakfast Boxes` from Koramangala Kitchen: `delivered`
 - `45 Dosa Breakfast Packs` from Whitefield Tech Park Canteen: `delivered`
 - `8 Filter Coffee Flasks` from Indiranagar Bakery House: `cancelled`
 
@@ -110,7 +136,12 @@ Several seeded donations include safe sample `photo_url` values so the donor, NG
 
 Donor dashboard:
 
-- The current donor demo account shows Koramangala Kitchen data, including an open urgent biryani donation and a cancelled lemon rice donation.
+- The current donor demo account shows Asha Rao / Koramangala Kitchen data, including open, delivered, and cancelled donations.
+- Expected Asha Rao metrics after reseed:
+  - Active Donations: 2
+  - Meals Rescued / Food Shared: 62
+  - Impact Points / Community Score: 80
+  - Partnerships / Local NGOs Supported: 2
 - Additional donor rows keep the NGO marketplace and donation zones active across JP Nagar, Marathahalli, Hebbal, Whitefield, and Koramangala.
 
 NGO marketplace:
@@ -149,11 +180,11 @@ High-Need Community Zones used for the demo:
 
 ## Current Seed Counts
 
-After the Phase 8 reseed, the script creates:
+After the donor dashboard polish reseed, the script creates:
 
 - 18 profiles
 - 5 NGO profiles
-- 15 donations
+- 17 donations
 - 14 match suggestions
 - 6 delivery jobs
 - 42 analytics snapshots

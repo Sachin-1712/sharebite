@@ -1,6 +1,6 @@
 # Demo Test Workflows
 
-Last updated: 2026-05-05
+Last updated: 2026-05-16
 
 ## Phase 1 Workflow Test
 
@@ -511,6 +511,49 @@ Validated checks:
 - NGO marketplace API returned the updated source for the donation.
 - Chat-wizard-equivalent create with source `Udupi Grand, HSR Layout` returned `200`.
 - `npm run seed:demo` was run again after testing to remove temporary Feature 2 rows.
+
+Build check:
+
+```bash
+npm run build
+```
+
+Result: Passed on 2026-05-16.
+
+## Donor Dashboard View All And Demo Metrics Test
+
+Purpose: verify Asha Rao has realistic Supabase-backed donor metrics and the Active Donations `View All` control opens a complete donor history modal.
+
+Setup:
+
+```bash
+npm run seed:demo
+```
+
+Result: Passed. The reseed created 18 profiles, 5 NGO profiles, 17 donations, 14 match suggestions, 6 delivery jobs, and 42 analytics snapshots.
+
+Migration check:
+
+- Supabase was reachable from the project environment.
+- The environment had only the anon key, with no service role key, database URL, or Supabase CLI access.
+- The live `donations` table still lacked `donor_type` and `food_source_name`, so the migration needs manual Supabase SQL Editor application.
+- App fallback notes metadata remains in place until the physical columns are applied.
+
+Validated checks:
+
+- Asha Rao / Koramangala Kitchen donor metrics after reseed:
+  - Active Donations: 2
+  - Meals Rescued: 62
+  - Impact Points: 80
+  - Partnerships: 2
+- The browser donor dashboard showed those same non-zero metrics.
+- `View All` opened an `All Donations` dialog with 5 Asha Rao donations.
+- The dialog included open, delivered, and cancelled donations with title, quantity, status, pickup area, prepared time, pickup window, and edit/delete availability.
+- Delivered and cancelled rows showed `Locked`; open rows showed edit/delete actions.
+- Donor API create smoke test created `View All Smoke Test Meals` and confirmed it appeared in the donor donation feed used by the modal.
+- NGO marketplace API still returned open donations.
+- Delivery API still returned assigned/completed jobs.
+- `npm run seed:demo` was run again after the smoke test to restore the Bangalore baseline.
 
 Build check:
 

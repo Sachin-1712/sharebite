@@ -1,6 +1,6 @@
 # Current Status
 
-Last updated: 2026-05-03
+Last updated: 2026-05-16
 
 ## Phase 1 Complete: Core Workflow Reliability
 
@@ -484,8 +484,47 @@ Verification:
 - `npm run seed:demo` was run after tests to restore the Bangalore baseline.
 - `npm run build` passed.
 
+## Donor Dashboard Polish And Migration Pass
+
+The donor dashboard now has a functional `View All` history modal, and Asha Rao's demo dashboard metrics are backed by real seeded donation history.
+
+Migration status:
+
+- Supabase was reachable after project resume.
+- The live `donations` table still did not include `donor_type` or `food_source_name`.
+- This workspace has only the anon Supabase key, with no service role key, database URL, or Supabase CLI access, so `supabase/migrations/20260516_add_donation_source_fields.sql` could not be applied automatically.
+- Exact manual SQL is documented in `DEMO_SEEDING.md`.
+- App-level fallback notes metadata remains active until the physical columns are applied.
+
+Changes:
+
+- Added an `All Donations` dialog opened from the donor dashboard `View All` button.
+- The dialog lists the donor's complete Supabase-backed history, including open, delivered, cancelled, in-transit, picked-up, accepted, and pickup-assigned donations when present.
+- Each row shows title, quantity, status, pickup area/address, prepared time, pickup window, food source when available, and edit/delete availability.
+- Open/pre-pickup rows keep the existing edit/delete actions; delivered and cancelled rows show locked management state.
+- Added two delivered Koramangala Kitchen donations to the safe demo seed for Asha Rao:
+  - `42 Curd Rice Meal Cups`
+  - `20 Millet Upma Breakfast Boxes`
+- Asha Rao's donor metrics after reseed now derive from real delivered history:
+  - Active Donations: 2
+  - Meals Rescued: 62
+  - Impact Points: 80
+  - Partnerships: 2
+
+Verification:
+
+- `npm run seed:demo` passed and recreated 17 donations.
+- Supabase query confirmed Asha Rao has 5 donations: 2 open, 2 delivered, and 1 cancelled.
+- In-app browser check confirmed the donor dashboard shows Active Donations `2`, Meals Rescued `62`, Impact Points `80`, and Partnerships `2`.
+- In-app browser check confirmed `View All` opens the `All Donations` modal with 5 rows and locked/editable states.
+- API smoke test created `View All Smoke Test Meals` and confirmed it appeared in the donor feed used by the modal.
+- NGO marketplace API and delivery jobs API still returned valid data.
+- `npm run seed:demo` was run again after the smoke test to restore the Bangalore baseline.
+- `npm run build` passed.
+
 ## Known Remaining Issues
 
 - `npm run lint` still has pre-existing lint failures and was not made a Phase 1 blocker.
 - One pre-existing inconsistent live demo row remains quarantined/documented instead of deleted.
 - Supabase Storage bucket creation still requires service-role/admin setup; the app keeps the Phase 6 small-image fallback.
+- Donor source columns still require manual Supabase SQL Editor migration unless a service role key or database URL is added locally.

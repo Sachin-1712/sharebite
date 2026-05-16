@@ -94,6 +94,46 @@ const isoToTime = (value: string) => value?.slice(11, 16) || '';
 
 const statusOrder = ['open', 'accepted', 'pickup_assigned', 'picked_up', 'in_transit', 'delivered', 'cancelled'];
 
+const formatDateTime = (value?: string | null) => {
+  if (!value) return 'Not set';
+
+  return new Intl.DateTimeFormat('en-IN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Asia/Kolkata',
+  }).format(new Date(value));
+};
+
+const formatPickupWindow = (start?: string | null, end?: string | null) => {
+  if (!start && !end) return 'Not set';
+
+  const formatter = new Intl.DateTimeFormat('en-IN', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Asia/Kolkata',
+  });
+
+  if (start && end) return `${formatter.format(new Date(start))} - ${formatter.format(new Date(end))}`;
+  return formatter.format(new Date(start || end || ''));
+};
+
+const getPickupArea = (locationName: string) => {
+  const bangaloreAreas = [
+    'Koramangala',
+    'Indiranagar',
+    'Jayanagar',
+    'Whitefield',
+    'HSR Layout',
+    'MG Road',
+    'Electronic City',
+    'JP Nagar',
+    'Malleshwaram',
+    'Marathahalli',
+    'Hebbal',
+  ];
+  return bangaloreAreas.find((area) => locationName.toLowerCase().includes(area.toLowerCase())) || locationName;
+};
+
 const timeOptions = Array.from({ length: 96 }, (_, i) => {
   const hour = Math.floor(i / 4);
   const minute = (i % 4) * 15;
@@ -175,6 +215,7 @@ export function DonorOverview({ stats, recentDonations, analytics = [], donorNam
   const firstName = donorName.split(' ')[0];
   const [editingDonation, setEditingDonation] = useState<Donation | null>(null);
   const [deleteDonation, setDeleteDonation] = useState<Donation | null>(null);
+  const [allDonationsOpen, setAllDonationsOpen] = useState(false);
   const [editForm, setEditForm] = useState<ReturnType<typeof createEditForm> | null>(null);
   const [editPhotoFile, setEditPhotoFile] = useState<File | null>(null);
   const [editPhotoPreview, setEditPhotoPreview] = useState<string | null>(null);
@@ -467,7 +508,13 @@ export function DonorOverview({ stats, recentDonations, analytics = [], donorNam
                   <p className="text-[10px] font-bold text-fb-on-surface-variant uppercase tracking-widest opacity-60">Current donation status</p>
                 </div>
               </div>
-              <button className="text-[10px] font-black text-fb-primary uppercase tracking-widest hover:underline">View All</button>
+              <button
+                type="button"
+                onClick={() => setAllDonationsOpen(true)}
+                className="text-[10px] font-black text-fb-primary uppercase tracking-widest hover:underline"
+              >
+                View All
+              </button>
             </div>
             
             <div className="flex-1 p-4 space-y-3 overflow-y-auto custom-scrollbar">
@@ -551,6 +598,131 @@ export function DonorOverview({ stats, recentDonations, analytics = [], donorNam
           </Card>
         </div>
       </div>
+
+      <Dialog open={allDonationsOpen} onOpenChange={setAllDonationsOpen}>
+        <DialogContent className="max-h-[90vh] overflow-hidden rounded-[2rem] bg-white p-0 sm:max-w-5xl">
+          <DialogHeader className="border-b border-fb-outline-variant/10 p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <DialogTitle className="text-xl font-black text-fb-on-surface">All Donations</DialogTitle>
+                <DialogDescription>
+                  Complete donor history from Supabase, including active, completed, and cancelled donations.
+                </DialogDescription>
+              </div>
+              <Badge variant="outline" className="mt-1 rounded-full border-fb-outline-variant/20 px-3 py-1 text-[9px] font-black uppercase tracking-widest">
+                {recentDonations.length} total
+              </Badge>
+            </div>
+          </DialogHeader>
+
+          <div className="max-h-[68vh] overflow-y-auto p-5 custom-scrollbar">
+            {recentDonations.length === 0 ? (
+              <div className="flex min-h-[320px] flex-col items-center justify-center rounded-[2rem] border-2 border-dashed border-fb-outline-variant/20 bg-fb-surface-container-lowest p-8 text-center">
+                <Package className="mb-4 h-10 w-10 text-fb-outline opacity-40" />
+                <p className="text-sm font-black uppercase tracking-widest text-fb-on-surface">No Donations Yet</p>
+                <p className="mt-2 max-w-sm text-xs font-medium text-fb-on-surface-variant">
+                  Create a donation and it will appear here with its status, pickup details, source, and management options.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {recentDonations.map((donation) => {
+                  const canManage = editableStatuses.includes(donation.status);
+
+                  return (
+                    <div
+                      key={donation.id}
+                      className="grid gap-4 rounded-[1.5rem] border border-fb-outline-variant/10 bg-fb-surface-container-lowest p-4 md:grid-cols-[72px_minmax(0,1.4fr)_minmax(240px,1fr)_auto]"
+                    >
+                      <div className="h-16 w-16 overflow-hidden rounded-2xl bg-white text-fb-primary shadow-inner">
+                        {donation.photoUrl ? (
+                          <img src={donation.photoUrl} alt={donation.title} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center">
+                            <Package className="h-6 w-6" />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <StatusBadge status={donation.status} className="h-5 border-none px-2 py-0 text-[8px] font-black" />
+                          <Badge className="rounded-full bg-fb-primary/10 px-2 py-0.5 text-[8px] font-black uppercase tracking-widest text-fb-primary shadow-none">
+                            {donation.urgency === 'high' ? 'Urgent' : donation.urgency}
+                          </Badge>
+                        </div>
+                        <p className="mt-2 break-words text-sm font-black leading-snug text-fb-on-surface">{donation.title}</p>
+                        <p className="mt-1 text-xs font-bold text-fb-on-surface-variant">
+                          {donation.quantity} {donation.unit} · {donation.foodType}
+                        </p>
+                        <p className="mt-2 flex items-start gap-1.5 text-xs font-semibold text-fb-on-surface-variant/70">
+                          <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          <span className="break-words">{getPickupArea(donation.locationName)} · {donation.locationName}</span>
+                        </p>
+                      </div>
+
+                      <div className="grid gap-2 text-xs font-bold text-fb-on-surface-variant">
+                        <div className="rounded-2xl bg-white p-3">
+                          <p className="text-[8px] font-black uppercase tracking-widest text-fb-on-surface-variant/50">Prepared</p>
+                          <p className="mt-1 text-fb-on-surface">{formatDateTime(donation.preparedAt)}</p>
+                        </div>
+                        <div className="rounded-2xl bg-white p-3">
+                          <p className="text-[8px] font-black uppercase tracking-widest text-fb-on-surface-variant/50">Pickup Window</p>
+                          <p className="mt-1 text-fb-on-surface">{formatPickupWindow(donation.pickupStart, donation.pickupEnd)}</p>
+                        </div>
+                        {donation.foodSourceName && (
+                          <div className="rounded-2xl bg-white p-3">
+                            <p className="text-[8px] font-black uppercase tracking-widest text-fb-on-surface-variant/50">Food Source</p>
+                            <p className="mt-1 break-words text-fb-on-surface">{donation.foodSourceName}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 md:flex-col md:items-end md:justify-center">
+                        {canManage ? (
+                          <>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-9 rounded-xl text-[10px] font-black uppercase tracking-widest"
+                              onClick={() => {
+                                setAllDonationsOpen(false);
+                                openEditDialog(donation);
+                              }}
+                            >
+                              <Edit3 className="mr-1.5 h-3.5 w-3.5" />
+                              Edit
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-9 rounded-xl text-[10px] font-black uppercase tracking-widest text-fb-error hover:text-fb-error"
+                              onClick={() => {
+                                setAllDonationsOpen(false);
+                                setDeleteDonation(donation);
+                              }}
+                            >
+                              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                              Delete
+                            </Button>
+                          </>
+                        ) : (
+                          <div className="rounded-2xl bg-white px-3 py-2 text-right">
+                            <p className="text-[8px] font-black uppercase tracking-widest text-fb-on-surface-variant/50">Manage</p>
+                            <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-fb-on-surface-variant">Locked</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!editingDonation} onOpenChange={(open) => {
         if (!open) {
