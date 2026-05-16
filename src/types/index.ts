@@ -2,6 +2,8 @@
 
 export type UserRole = 'donor' | 'ngo' | 'delivery';
 
+export type DonorType = 'restaurant_business' | 'individual' | 'event_organizer';
+
 export type DonationStatus =
   | 'open'
   | 'matched'
@@ -63,6 +65,8 @@ export interface Donation {
   title: string;
   category: FoodCategory;
   foodType: string;
+  donorType?: DonorType;
+  foodSourceName?: string;
   quantity: number;
   unit: string;
   urgency: Urgency;

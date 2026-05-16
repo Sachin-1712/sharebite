@@ -30,6 +30,7 @@ import { Donation, AnalyticsSnapshot } from '@/types';
 import { toast } from 'sonner';
 import { uploadDonationPhoto } from '@/lib/photo-upload';
 import { combineLocalDateAndTime, splitISOToLocalDateTime, validatePreparedAt } from '@/lib/food-safety';
+import { bangaloreFoodSources, DONOR_TYPE_LABELS, FOOD_SOURCE_OTHER, validateDonationSource } from '@/lib/donation-source';
 import {
   Package,
   Utensils,
@@ -108,10 +109,19 @@ const timeOptions = Array.from({ length: 96 }, (_, i) => {
 
 const createEditForm = (donation: Donation) => {
   const prepared = splitISOToLocalDateTime(donation.preparedAt);
+  const foodSourceChoice = donation.foodSourceName && bangaloreFoodSources.includes(donation.foodSourceName)
+    ? donation.foodSourceName
+    : donation.foodSourceName
+      ? FOOD_SOURCE_OTHER
+      : '';
+
   return {
     title: donation.title,
     category: donation.category,
     foodType: donation.foodType,
+    donorType: donation.donorType || 'restaurant_business',
+    foodSourceChoice,
+    foodSourceName: foodSourceChoice === FOOD_SOURCE_OTHER ? donation.foodSourceName || '' : '',
     preparedDate: prepared.date,
     preparedTime: prepared.time,
     quantity: String(donation.quantity),
@@ -219,6 +229,15 @@ export function DonorOverview({ stats, recentDonations, analytics = [], donorNam
 
   const handleSaveEdit = async () => {
     if (!editingDonation || !editForm) return;
+    const foodSourceName = editForm.donorType === 'individual'
+      ? (editForm.foodSourceChoice === FOOD_SOURCE_OTHER ? editForm.foodSourceName : editForm.foodSourceChoice)
+      : '';
+    const sourceValidation = validateDonationSource(editForm.donorType as any, foodSourceName);
+    if (!sourceValidation.ok) {
+      toast.error(sourceValidation.error);
+      return;
+    }
+
     const preparedAt = combineLocalDateAndTime(editForm.preparedDate, editForm.preparedTime);
     const preparedValidation = validatePreparedAt(preparedAt);
     if (!preparedValidation.ok) {
@@ -254,6 +273,8 @@ export function DonorOverview({ stats, recentDonations, analytics = [], donorNam
           donationId: editingDonation.id,
           donation: {
             ...editForm,
+            donorType: editForm.donorType,
+            foodSourceName,
             preparedAt,
             photoUrl,
             quantity: Number(editForm.quantity),
@@ -574,6 +595,44 @@ export function DonorOverview({ stats, recentDonations, analytics = [], donorNam
               </div>
 
               <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-fb-on-surface-variant/60">Donor Type</Label>
+                <Select value={editForm.donorType} onValueChange={(value) => updateEditForm('donorType', value)}>
+                  <SelectTrigger className="h-12 rounded-2xl bg-fb-surface-container-low font-bold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-2xl">
+                    {Object.entries(DONOR_TYPE_LABELS).map(([value, label]) => (
+                      <SelectItem key={value} value={value}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {editForm.donorType === 'individual' && (
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-fb-on-surface-variant/60">Where did you buy this food from?</Label>
+                  <Select value={editForm.foodSourceChoice} onValueChange={(value) => updateEditForm('foodSourceChoice', value)}>
+                    <SelectTrigger className="h-12 rounded-2xl bg-fb-surface-container-low font-bold">
+                      <SelectValue placeholder="Select source" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-2xl max-h-[320px]">
+                      {bangaloreFoodSources.map((source) => (
+                        <SelectItem key={source} value={source}>{source}</SelectItem>
+                      ))}
+                      <SelectItem value={FOOD_SOURCE_OTHER}>Other / Enter manually</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {editForm.donorType === 'individual' && editForm.foodSourceChoice === FOOD_SOURCE_OTHER && (
+                <div className="space-y-2 sm:col-span-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-fb-on-surface-variant/60">Food Source Name</Label>
+                  <Input value={editForm.foodSourceName} onChange={(e) => updateEditForm('foodSourceName', e.target.value)} className="h-12 rounded-2xl bg-fb-surface-container-low font-bold" />
+                </div>
+              )}
+
+              <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-fb-on-surface-variant/60">Cooked/Prepared Date</Label>
                 <Input type="date" value={editForm.preparedDate} onChange={(e) => updateEditForm('preparedDate', e.target.value)} className="h-12 rounded-2xl bg-fb-surface-container-low font-bold" />
               </div>
@@ -687,7 +746,7 @@ export function DonorOverview({ stats, recentDonations, analytics = [], donorNam
             }} disabled={saving}>
               Cancel
             </Button>
-            <Button className="h-11 rounded-2xl bg-fb-primary px-6 text-white" onClick={handleSaveEdit} disabled={saving || !editForm?.title || !editForm?.quantity || !editForm?.preparedDate || !editForm?.preparedTime}>
+            <Button className="h-11 rounded-2xl bg-fb-primary px-6 text-white" onClick={handleSaveEdit} disabled={saving || !editForm?.title || !editForm?.quantity || !editForm?.preparedDate || !editForm?.preparedTime || (editForm?.donorType === 'individual' && !editForm?.foodSourceChoice)}>
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Changes'}
             </Button>
           </DialogFooter>

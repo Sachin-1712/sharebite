@@ -15,6 +15,13 @@ Status key:
   - Backend validation blocks food prepared more than 24 hours ago or in the future.
   - Donor Sharebite AI donation wizard now asks when food was cooked/prepared before creating a donation.
 
+- [x] Donor type and food source details
+  - Donor create/edit flows now collect donor type.
+  - Individual donors must provide where the food was bought from.
+  - Added Bangalore restaurant/place options plus manual entry.
+  - NGO marketplace/details can show food source for individual donations.
+  - Migration SQL was added for `donor_type` and `food_source_name`.
+
 - [x] 1. Simplify language
   - Replaced dense operational wording with clear demo-friendly labels.
   - Completed examples:

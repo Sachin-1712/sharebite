@@ -7,8 +7,10 @@ import {
   DeliveryJob,
   AnalyticsSnapshot,
   FoodCategory,
+  DonorType,
 } from '@/types';
 import { supabase } from './supabase';
+import { normalizeDonorType } from './donation-source';
 
 // Helper to map DB snake_case to TS camelCase
 const parseFoodTypes = (value: unknown): FoodCategory[] => {
@@ -28,6 +30,39 @@ const parseFoodTypes = (value: unknown): FoodCategory[] => {
   return [];
 };
 
+const sourceMetaPattern = /^\[Sharebite source: donor_type=([^;\]]+)(?:; food_source_name=([^\]]*))?\]\n?/;
+
+const parseSourceMetadata = (notes?: string | null) => {
+  const rawNotes = notes || '';
+  const match = rawNotes.match(sourceMetaPattern);
+  if (!match) {
+    return {
+      donorType: undefined,
+      foodSourceName: undefined,
+      notes: rawNotes,
+    };
+  }
+
+  return {
+    donorType: normalizeDonorType(match[1]),
+    foodSourceName: match[2] ? decodeURIComponent(match[2]) : undefined,
+    notes: rawNotes.replace(sourceMetaPattern, ''),
+  };
+};
+
+const withSourceMetadata = (notes: string | undefined, donorType?: DonorType, foodSourceName?: string) => {
+  if (!donorType && !foodSourceName) return notes || '';
+
+  const cleanNotes = parseSourceMetadata(notes).notes;
+  return `[Sharebite source: donor_type=${normalizeDonorType(donorType)}; food_source_name=${encodeURIComponent(foodSourceName || '')}]\n${cleanNotes}`.trimEnd();
+};
+
+const isMissingSourceColumnError = (error: any) => (
+  error?.code === 'PGRST204' ||
+  error?.message?.includes('donor_type') ||
+  error?.message?.includes('food_source_name')
+);
+
 const mapUser = (row: any): User => ({
   id: row.id,
   name: row.name,
@@ -41,29 +76,35 @@ const mapUser = (row: any): User => ({
   createdAt: row.created_at,
 });
 
-const mapDonation = (row: any): Donation => ({
-  id: row.id,
-  donorId: row.donor_id,
-  title: row.title,
-  category: row.category as any,
-  foodType: row.food_type,
-  quantity: row.quantity,
-  unit: row.unit,
-  urgency: row.urgency as any,
-  preparedAt: row.prepared_at,
-  expiresAt: row.expires_at,
-  pickupStart: row.pickup_start,
-  pickupEnd: row.pickup_end,
-  locationName: row.location_name,
-  latitude: row.latitude,
-  longitude: row.longitude,
-  notes: row.notes,
-  isVegetarian: row.is_vegetarian,
-  photoUrl: row.photo_url || undefined,
-  status: row.status as any,
-  acceptedByNgoId: row.accepted_by_ngo_id,
-  createdAt: row.created_at,
-});
+const mapDonation = (row: any): Donation => {
+  const sourceMeta = parseSourceMetadata(row.notes);
+
+  return {
+    id: row.id,
+    donorId: row.donor_id,
+    title: row.title,
+    category: row.category as any,
+    foodType: row.food_type,
+    donorType: normalizeDonorType(sourceMeta.donorType || row.donor_type),
+    foodSourceName: sourceMeta.foodSourceName || row.food_source_name,
+    quantity: row.quantity,
+    unit: row.unit,
+    urgency: row.urgency as any,
+    preparedAt: row.prepared_at,
+    expiresAt: row.expires_at,
+    pickupStart: row.pickup_start,
+    pickupEnd: row.pickup_end,
+    locationName: row.location_name,
+    latitude: row.latitude,
+    longitude: row.longitude,
+    notes: sourceMeta.notes,
+    isVegetarian: row.is_vegetarian,
+    photoUrl: row.photo_url || undefined,
+    status: row.status as any,
+    acceptedByNgoId: row.accepted_by_ngo_id,
+    createdAt: row.created_at,
+  };
+};
 
 const mapJob = (row: any): DeliveryJob => ({
   id: row.id,
@@ -167,6 +208,8 @@ export async function createDonation(donation: Donation): Promise<Donation> {
     title: donation.title,
     category: donation.category,
     food_type: donation.foodType,
+    donor_type: normalizeDonorType(donation.donorType),
+    food_source_name: donation.foodSourceName || null,
     quantity: donation.quantity,
     unit: donation.unit,
     urgency: donation.urgency,
@@ -184,6 +227,19 @@ export async function createDonation(donation: Donation): Promise<Donation> {
     accepted_by_ngo_id: donation.acceptedByNgoId || null,
   };
   const { data, error } = await supabase.from('donations').insert([dbDonation]).select().single();
+  if (error && isMissingSourceColumnError(error)) {
+    const fallbackDonation = {
+      ...dbDonation,
+      notes: withSourceMetadata(donation.notes, donation.donorType, donation.foodSourceName),
+    };
+    delete (fallbackDonation as any).donor_type;
+    delete (fallbackDonation as any).food_source_name;
+
+    const fallback = await supabase.from('donations').insert([fallbackDonation]).select().single();
+    if (fallback.error) throw fallback.error;
+    return mapDonation(fallback.data);
+  }
+
   if (error) throw error;
   return mapDonation(data);
 }
@@ -204,12 +260,14 @@ export async function updateDonationStatus(
 
 export async function updateDonationDetails(
   id: string,
-  updates: Pick<Donation, 'title' | 'category' | 'foodType' | 'preparedAt' | 'quantity' | 'unit' | 'urgency' | 'pickupStart' | 'pickupEnd' | 'locationName' | 'notes' | 'isVegetarian' | 'photoUrl'>
+  updates: Pick<Donation, 'title' | 'category' | 'foodType' | 'donorType' | 'foodSourceName' | 'preparedAt' | 'quantity' | 'unit' | 'urgency' | 'pickupStart' | 'pickupEnd' | 'locationName' | 'notes' | 'isVegetarian' | 'photoUrl'>
 ): Promise<Donation | undefined> {
-  const { data, error } = await supabase.from('donations').update({
+  const updatePayload = {
     title: updates.title,
     category: updates.category,
     food_type: updates.foodType,
+    donor_type: normalizeDonorType(updates.donorType),
+    food_source_name: updates.foodSourceName || null,
     prepared_at: updates.preparedAt,
     quantity: updates.quantity,
     unit: updates.unit,
@@ -220,7 +278,22 @@ export async function updateDonationDetails(
     notes: updates.notes,
     is_vegetarian: updates.isVegetarian,
     photo_url: updates.photoUrl || null,
-  }).eq('id', id).select().single();
+  };
+
+  const { data, error } = await supabase.from('donations').update(updatePayload).eq('id', id).select().single();
+
+  if (error && isMissingSourceColumnError(error)) {
+    const fallbackPayload = {
+      ...updatePayload,
+      notes: withSourceMetadata(updates.notes, updates.donorType, updates.foodSourceName),
+    };
+    delete (fallbackPayload as any).donor_type;
+    delete (fallbackPayload as any).food_source_name;
+
+    const fallback = await supabase.from('donations').update(fallbackPayload).eq('id', id).select().single();
+    if (fallback.error) return undefined;
+    return mapDonation(fallback.data);
+  }
 
   if (error) return undefined;
   return mapDonation(data);

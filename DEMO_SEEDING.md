@@ -86,6 +86,8 @@ This is the location shown in NGO Analytics for the demo NGO context.
 
 All seeded `prepared_at` values are kept within the 24-hour food safety window so demo rows remain valid under Feature 1 validation.
 
+Feature 2 adds migration SQL for `donations.donor_type` and `donations.food_source_name`. If those columns are not applied yet in Supabase, the app keeps source details in Supabase notes metadata and maps them back for the demo UI.
+
 - `35 Veg Biryani Meal Boxes` from Koramangala Kitchen: `open`, urgent
 - `18 Assorted Pastries` from Indiranagar Bakery House: `open`, medium
 - `22 Fruit Salad Cups` from HSR Fresh Foods: `open`, low

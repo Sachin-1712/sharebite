@@ -487,3 +487,35 @@ npm run build
 ```
 
 Result: Passed on 2026-05-16.
+
+## Feature 2 Donor Type And Food Source Test
+
+Purpose: verify individual donors must provide where food was bought from, and NGOs can see that source.
+
+Setup:
+
+```bash
+npm run seed:demo
+```
+
+Validated checks:
+
+- Supabase was reachable after project resume.
+- Live `donations` table was inspected before coding; `donor_type` and `food_source_name` were not present yet.
+- Migration SQL was added at `supabase/migrations/20260516_add_donation_source_fields.sql`.
+- Restaurant/business donor create without food source returned `200`.
+- Individual donor create without food source returned `400`.
+- Individual donor create with selected source `Meghana Foods, Koramangala` returned `200`.
+- Individual donor create with custom source `Local Family Store, HSR Layout` returned `200`.
+- Donor edit updated the food source to `A2B, Jayanagar`.
+- NGO marketplace API returned the updated source for the donation.
+- Chat-wizard-equivalent create with source `Udupi Grand, HSR Layout` returned `200`.
+- `npm run seed:demo` was run again after testing to remove temporary Feature 2 rows.
+
+Build check:
+
+```bash
+npm run build
+```
+
+Result: Passed on 2026-05-16.

@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { validatePreparedAt } from '@/lib/food-safety';
+import { bangaloreFoodSources, DONOR_TYPE_LABELS, validateDonationSource } from '@/lib/donation-source';
 import {
   X,
   Sparkles,
@@ -18,7 +19,7 @@ import {
   BarChart3,
   Route,
 } from 'lucide-react';
-import { FoodCategory, Urgency, UserRole } from '@/types';
+import { DonorType, FoodCategory, Urgency, UserRole } from '@/types';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -28,6 +29,8 @@ interface Message {
 type WizardStep =
   | 'title'
   | 'food'
+  | 'donor_type'
+  | 'food_source'
   | 'prepared'
   | 'quantity'
   | 'location'
@@ -41,6 +44,8 @@ type DonationDraft = {
   title?: string;
   category?: FoodCategory;
   foodType?: string;
+  donorType?: DonorType;
+  foodSourceName?: string;
   preparedAt?: string;
   quantity?: number;
   unit?: string;
@@ -142,6 +147,19 @@ const parseQuantity = (text: string) => {
     quantity: Number(match[1]),
     unit: (match[2] || 'meals').trim().toLowerCase(),
   };
+};
+
+const parseDonorType = (text: string): DonorType | null => {
+  const lower = text.toLowerCase();
+  if (lower.includes('individual') || lower.includes('personal')) return 'individual';
+  if (lower.includes('event')) return 'event_organizer';
+  if (lower.includes('restaurant') || lower.includes('business') || lower.includes('hotel') || lower.includes('cafe')) return 'restaurant_business';
+  return null;
+};
+
+const parseFoodSource = (text: string) => {
+  const lower = text.toLowerCase();
+  return bangaloreFoodSources.find((source) => source.toLowerCase().includes(lower) || lower.includes(source.toLowerCase())) || text.trim();
 };
 
 const parsePreparedAt = (text: string) => {
@@ -249,6 +267,8 @@ const summarizeDraft = (draft: DonationDraft) => (
   `Donation summary:\n` +
   `Title: ${draft.title}\n` +
   `Food: ${draft.foodType} (${draft.category?.replace('_', ' ')})\n` +
+  `Donor type: ${draft.donorType ? DONOR_TYPE_LABELS[draft.donorType] : 'Not set'}\n` +
+  `Food source: ${draft.foodSourceName || 'Not required'}\n` +
   `Cooked/prepared: ${draft.preparedAt ? new Date(draft.preparedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'Not set'}\n` +
   `Quantity: ${draft.quantity} ${draft.unit}\n` +
   `Pickup: ${draft.locationName}\n` +
@@ -304,6 +324,8 @@ export function ChatPanel({ onClose, userRole }: { onClose: () => void; userRole
             title: draft.title,
             category: draft.category,
             foodType: draft.foodType,
+            donorType: draft.donorType,
+            foodSourceName: draft.foodSourceName,
             quantity: draft.quantity,
             unit: draft.unit,
             urgency: draft.urgency,
@@ -357,6 +379,38 @@ export function ChatPanel({ onClose, userRole }: { onClose: () => void; userRole
 
     if (wizard.step === 'food') {
       Object.assign(draft, parseFood(text));
+      setWizard({ active: true, step: 'donor_type', draft });
+      addAssistantMessage('What donor type is this: Restaurant / Business, Individual, or Event Organizer?');
+      return;
+    }
+
+    if (wizard.step === 'donor_type') {
+      const donorType = parseDonorType(text);
+      if (!donorType) {
+        addAssistantMessage('Please choose one donor type: Restaurant / Business, Individual, or Event Organizer.');
+        return;
+      }
+      draft.donorType = donorType;
+
+      if (donorType === 'individual') {
+        setWizard({ active: true, step: 'food_source', draft });
+        addAssistantMessage(`Where did you buy this food from? You can type a restaurant/place such as ${bangaloreFoodSources.slice(0, 3).join(', ')}, or type your own source.`);
+        return;
+      }
+
+      setWizard({ active: true, step: 'prepared', draft });
+      addAssistantMessage('When was the food cooked/prepared? Example: "now", "2 hours ago", or "today 10:30". Food older than 24 hours cannot be donated.');
+      return;
+    }
+
+    if (wizard.step === 'food_source') {
+      const foodSourceName = parseFoodSource(text);
+      const sourceValidation = validateDonationSource(draft.donorType, foodSourceName);
+      if (!sourceValidation.ok) {
+        addAssistantMessage(sourceValidation.error || 'Please enter where the food was bought from.');
+        return;
+      }
+      draft.foodSourceName = foodSourceName;
       setWizard({ active: true, step: 'prepared', draft });
       addAssistantMessage('When was the food cooked/prepared? Example: "now", "2 hours ago", or "today 10:30". Food older than 24 hours cannot be donated.');
       return;

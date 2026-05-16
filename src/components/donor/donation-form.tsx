@@ -18,6 +18,7 @@ import {
 import { toast } from 'sonner';
 import { uploadDonationPhoto } from '@/lib/photo-upload';
 import { combineLocalDateAndTime, validatePreparedAt } from '@/lib/food-safety';
+import { bangaloreFoodSources, DONOR_TYPE_LABELS, FOOD_SOURCE_OTHER, validateDonationSource } from '@/lib/donation-source';
 import {
   Package,
   MapPin,
@@ -74,6 +75,9 @@ export function DonationForm({ donorArea }: { donorArea?: string }) {
     title: '',
     category: '',
     foodType: '',
+    donorType: 'restaurant_business',
+    foodSourceChoice: '',
+    foodSourceName: '',
     preparedDate: '',
     preparedTime: '',
     quantity: '',
@@ -102,6 +106,15 @@ export function DonationForm({ donorArea }: { donorArea?: string }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const foodSourceName = form.donorType === 'individual'
+      ? (form.foodSourceChoice === FOOD_SOURCE_OTHER ? form.foodSourceName : form.foodSourceChoice)
+      : '';
+    const sourceValidation = validateDonationSource(form.donorType as any, foodSourceName);
+    if (!sourceValidation.ok) {
+      toast.error(sourceValidation.error);
+      return;
+    }
+
     const preparedAt = combineLocalDateAndTime(form.preparedDate, form.preparedTime);
     const preparedValidation = validatePreparedAt(preparedAt);
     if (!preparedValidation.ok) {
@@ -138,6 +151,8 @@ export function DonationForm({ donorArea }: { donorArea?: string }) {
           donation: {
             ...form,
             id: donationId,
+            donorType: form.donorType,
+            foodSourceName,
             preparedAt,
             quantity: Number(form.quantity),
             photoUrl,
@@ -240,6 +255,53 @@ export function DonationForm({ donorArea }: { donorArea?: string }) {
                         className="bg-fb-surface-container-low border-fb-outline-variant/5 rounded-2xl h-14 font-bold"
                       />
                     </div>
+                  </div>
+
+                  <div className="space-y-4 rounded-2xl border border-fb-outline-variant/10 bg-fb-surface-container-low p-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black text-fb-on-surface-variant uppercase tracking-widest opacity-40 ml-1">Donor Type</Label>
+                        <Select value={form.donorType} onValueChange={(v) => update('donorType', v)}>
+                          <SelectTrigger className="bg-white border-fb-outline-variant/5 rounded-2xl h-14 font-bold">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent className="rounded-2xl shadow-2xl">
+                            {Object.entries(DONOR_TYPE_LABELS).map(([value, label]) => (
+                              <SelectItem key={value} value={value}>{label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {form.donorType === 'individual' && (
+                        <div className="space-y-2">
+                          <Label className="text-[10px] font-black text-fb-on-surface-variant uppercase tracking-widest opacity-40 ml-1">Where did you buy this food from?</Label>
+                          <Select value={form.foodSourceChoice} onValueChange={(v) => update('foodSourceChoice', v)}>
+                            <SelectTrigger className="bg-white border-fb-outline-variant/5 rounded-2xl h-14 font-bold">
+                              <SelectValue placeholder="Select source" />
+                            </SelectTrigger>
+                            <SelectContent className="rounded-2xl shadow-2xl max-h-[320px]">
+                              {bangaloreFoodSources.map((source) => (
+                                <SelectItem key={source} value={source}>{source}</SelectItem>
+                              ))}
+                              <SelectItem value={FOOD_SOURCE_OTHER}>Other / Enter manually</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                    </div>
+
+                    {form.donorType === 'individual' && form.foodSourceChoice === FOOD_SOURCE_OTHER && (
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black text-fb-on-surface-variant uppercase tracking-widest opacity-40 ml-1">Food Source Name</Label>
+                        <Input
+                          value={form.foodSourceName}
+                          onChange={(e) => update('foodSourceName', e.target.value)}
+                          placeholder="Enter restaurant or store name"
+                          className="bg-white border-fb-outline-variant/5 rounded-2xl h-14 font-bold"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-2 gap-6">
@@ -439,7 +501,7 @@ export function DonationForm({ donorArea }: { donorArea?: string }) {
 
           <Button
             type="submit"
-            disabled={loading || !form.title || !form.category || !form.quantity || !form.preparedDate || !form.preparedTime}
+            disabled={loading || !form.title || !form.category || !form.quantity || !form.preparedDate || !form.preparedTime || (form.donorType === 'individual' && !form.foodSourceChoice)}
             className="w-full h-18 rounded-[2rem] bg-[#0f5238] hover:bg-[#1b4332] text-white font-black uppercase tracking-[0.2em] shadow-ambient-3 hover:translate-y-[-2px] transition-all group"
           >
             {loading ? (

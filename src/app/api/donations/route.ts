@@ -22,6 +22,7 @@ import {
 } from '@/lib/store';
 import { DeliveryJob, Donation } from '@/types';
 import { validatePreparedAt } from '@/lib/food-safety';
+import { normalizeDonorType, validateDonationSource } from '@/lib/donation-source';
 
 const donorEditableStatuses: Donation['status'][] = ['open', 'accepted', 'pickup_assigned'];
 
@@ -117,6 +118,12 @@ export async function POST(request: NextRequest) {
     if (!preparedValidation.ok) {
       return NextResponse.json({ error: preparedValidation.error }, { status: 400 });
     }
+    const donorType = normalizeDonorType(body.donation.donorType);
+    const foodSourceName = body.donation.foodSourceName?.trim() || undefined;
+    const sourceValidation = validateDonationSource(donorType, foodSourceName);
+    if (!sourceValidation.ok) {
+      return NextResponse.json({ error: sourceValidation.error }, { status: 400 });
+    }
 
     const donation: Donation = {
       id: body.donation.id || crypto.randomUUID(),
@@ -124,6 +131,8 @@ export async function POST(request: NextRequest) {
       title: body.donation.title,
       category: body.donation.category,
       foodType: body.donation.foodType,
+      donorType,
+      foodSourceName,
       quantity: Number(body.donation.quantity),
       unit: body.donation.unit,
       urgency: body.donation.urgency,
@@ -249,11 +258,19 @@ export async function PATCH(request: NextRequest) {
   if (!preparedValidation.ok) {
     return NextResponse.json({ error: preparedValidation.error }, { status: 400 });
   }
+  const donorType = normalizeDonorType(body.donation.donorType);
+  const foodSourceName = body.donation.foodSourceName?.trim() || undefined;
+  const sourceValidation = validateDonationSource(donorType, foodSourceName);
+  if (!sourceValidation.ok) {
+    return NextResponse.json({ error: sourceValidation.error }, { status: 400 });
+  }
 
   const edited = await updateDonationDetails(donation.id, {
     title: body.donation.title,
     category: body.donation.category,
     foodType: body.donation.foodType,
+    donorType,
+    foodSourceName,
     preparedAt,
     quantity: Number(body.donation.quantity),
     unit: body.donation.unit,

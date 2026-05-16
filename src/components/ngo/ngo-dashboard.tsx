@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { StatusBadge, UrgencyBadge } from '@/components/shared/status-badge';
 import { Donation } from '@/types';
+import { DONOR_TYPE_LABELS } from '@/lib/donation-source';
 import { toast } from 'sonner';
 import {
   Package,
@@ -338,6 +339,10 @@ export function NGODashboard({ stats, openDonations, acceptedDonations, ngoName 
                   <DetailItem label="Quantity" value={`${selectedDonation.quantity} ${selectedDonation.unit}`} icon={Package} />
                   <DetailItem label="Food Type" value={selectedDonation.foodType || categoryLabels[selectedDonation.category]} icon={Utensils} />
                   <DetailItem label="Pickup Location" value={selectedDonation.locationName} icon={MapPin} />
+                  <DetailItem label="Donor Type" value={DONOR_TYPE_LABELS[selectedDonation.donorType || 'restaurant_business']} icon={Building2} />
+                  {selectedDonation.foodSourceName && (
+                    <DetailItem label="Food Source" value={selectedDonation.foodSourceName} icon={Building2} />
+                  )}
                 </div>
               </div>
 
@@ -474,6 +479,12 @@ function DonationCard({ donation, onClick }: { donation: EnrichedDonation; onCli
           <p className="mb-5 line-clamp-2 break-words rounded-2xl bg-fb-surface-container-low p-3 text-[11px] font-semibold leading-relaxed text-fb-on-surface-variant">
             {donation.notes}
           </p>
+        )}
+        {donation.foodSourceName && (
+          <div className="mb-5 rounded-2xl border border-fb-primary/10 bg-fb-primary/5 p-3">
+            <p className="text-[8px] font-black uppercase tracking-widest text-fb-primary/60">Food Source</p>
+            <p className="mt-1 line-clamp-1 break-words text-[11px] font-black text-fb-on-surface">{donation.foodSourceName}</p>
+          </div>
         )}
 
         <div className="flex items-center justify-between pt-6 border-t border-fb-outline-variant/5 mt-auto">

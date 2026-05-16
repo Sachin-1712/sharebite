@@ -444,6 +444,46 @@ Verification:
 - Verified seeded demo donations have no `prepared_at` rows older than 24 hours.
 - `npm run build` passed.
 
+## Feature 2 Complete: Donor Type And Food Source Details
+
+Donors can now identify the source type of a donation, and individual donors must provide where the food was bought from.
+
+Changes:
+
+- Added app support for donation source fields:
+  - `donorType`
+  - `foodSourceName`
+- Added migration SQL at `supabase/migrations/20260516_add_donation_source_fields.sql` for:
+  - `donor_type`
+  - `food_source_name`
+- Current resumed Supabase environment only has the anon key, so the migration could not be applied automatically from this session.
+- Until the migration is applied, the app preserves source details in Supabase `notes` metadata and maps them back into `donorType` / `foodSourceName`.
+- Donor create form now includes:
+  - Restaurant / Business
+  - Individual
+  - Event Organizer
+- Individual donors must select or enter a food source.
+- Added Bangalore food source options including Meghana Foods, Empire Restaurant, MTR, CTR, Rameshwaram Cafe, Vidyarthi Bhavan, Truffles, Nagarjuna, A2B, and Udupi Grand.
+- Donor edit dialog can update donor type and source.
+- Donor Sharebite AI wizard now asks donor type and asks food source for individual donors.
+- Backend validation blocks individual donations without a food source.
+- NGO marketplace cards/details can show the food source so NGOs know where the food came from.
+
+Verification:
+
+- Supabase was reachable; live `donations` table was inspected and did not yet include the new source columns.
+- `npm run seed:demo` passed.
+- Restaurant/business donor create without food source returned `200`.
+- Individual donor create without food source returned `400`.
+- Individual donor create with selected restaurant returned `200`.
+- Individual donor create with custom source returned `200`.
+- Donor edit updated source from `Meghana Foods, Koramangala` to `A2B, Jayanagar`.
+- NGO open-donations API returned `foodSourceName: A2B, Jayanagar`.
+- Chat-wizard-equivalent create with `Udupi Grand, HSR Layout` returned `200`.
+- Browser plugin verification was unavailable in this resumed session, but the modal render path now includes `Food Source`.
+- `npm run seed:demo` was run after tests to restore the Bangalore baseline.
+- `npm run build` passed.
+
 ## Known Remaining Issues
 
 - `npm run lint` still has pre-existing lint failures and was not made a Phase 1 blocker.
