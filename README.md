@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="public/image.png" alt="Sharebite Logo" width="120" />
+</p>
+
 # Sharebite: AI-Powered Food Rescue Network
 
 Sharebite is a professional, full-stack platform designed to bridge the gap between food donors (restaurants, grocery stores) and NGOs to minimize food waste and support local communities.
