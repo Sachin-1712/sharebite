@@ -204,12 +204,13 @@ export async function updateDonationStatus(
 
 export async function updateDonationDetails(
   id: string,
-  updates: Pick<Donation, 'title' | 'category' | 'foodType' | 'quantity' | 'unit' | 'urgency' | 'pickupStart' | 'pickupEnd' | 'locationName' | 'notes' | 'isVegetarian' | 'photoUrl'>
+  updates: Pick<Donation, 'title' | 'category' | 'foodType' | 'preparedAt' | 'quantity' | 'unit' | 'urgency' | 'pickupStart' | 'pickupEnd' | 'locationName' | 'notes' | 'isVegetarian' | 'photoUrl'>
 ): Promise<Donation | undefined> {
   const { data, error } = await supabase.from('donations').update({
     title: updates.title,
     category: updates.category,
     food_type: updates.foodType,
+    prepared_at: updates.preparedAt,
     quantity: updates.quantity,
     unit: updates.unit,
     urgency: updates.urgency,

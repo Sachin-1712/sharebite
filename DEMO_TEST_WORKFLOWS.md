@@ -457,3 +457,33 @@ npm run build
 ```
 
 Result: Passed on 2026-05-05.
+
+## Feature 1 Food Safety Prepared-Time Test
+
+Purpose: verify donors cannot create or edit donations when food was cooked/prepared more than 24 hours ago or in the future.
+
+Setup:
+
+```bash
+npm run seed:demo
+```
+
+Validated checks:
+
+- Supabase was reachable after project resume.
+- Donor create API with `preparedAt` 2 days ago returned `400`.
+- Error message returned: `For safety, food cooked more than 24 hours ago cannot be donated.`
+- Donor create API with a future `preparedAt` returned `400`.
+- Donor create API with a valid same-day `preparedAt` returned `200`.
+- Donor edit API rejected changing a valid donation to a 2-day-old `preparedAt`.
+- Chat-wizard-equivalent donation creation with a valid prepared time returned `200`.
+- `npm run seed:demo` was run again after testing to remove temporary safety-test rows.
+- Seed sanity check confirmed all seeded demo donations are within the 24-hour prepared-time window.
+
+Build check:
+
+```bash
+npm run build
+```
+
+Result: Passed on 2026-05-16.

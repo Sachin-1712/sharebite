@@ -10,6 +10,11 @@ Status key:
 
 ## Requested Changes
 
+- [x] Food cooked/prepared date safety validation
+  - Donor create/edit flows now require cooked/prepared date and time.
+  - Backend validation blocks food prepared more than 24 hours ago or in the future.
+  - Donor Sharebite AI donation wizard now asks when food was cooked/prepared before creating a donation.
+
 - [x] 1. Simplify language
   - Replaced dense operational wording with clear demo-friendly labels.
   - Completed examples:

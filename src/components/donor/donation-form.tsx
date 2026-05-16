@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { uploadDonationPhoto } from '@/lib/photo-upload';
+import { combineLocalDateAndTime, validatePreparedAt } from '@/lib/food-safety';
 import {
   Package,
   MapPin,
@@ -73,6 +74,8 @@ export function DonationForm({ donorArea }: { donorArea?: string }) {
     title: '',
     category: '',
     foodType: '',
+    preparedDate: '',
+    preparedTime: '',
     quantity: '',
     unit: 'kg',
     urgency: 'medium',
@@ -99,6 +102,13 @@ export function DonationForm({ donorArea }: { donorArea?: string }) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const preparedAt = combineLocalDateAndTime(form.preparedDate, form.preparedTime);
+    const preparedValidation = validatePreparedAt(preparedAt);
+    if (!preparedValidation.ok) {
+      toast.error(preparedValidation.error);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -128,6 +138,7 @@ export function DonationForm({ donorArea }: { donorArea?: string }) {
           donation: {
             ...form,
             id: donationId,
+            preparedAt,
             quantity: Number(form.quantity),
             photoUrl,
           },
@@ -142,7 +153,8 @@ export function DonationForm({ donorArea }: { donorArea?: string }) {
         router.push('/dashboard/donor');
         router.refresh();
       } else {
-        toast.error('Submission failed');
+        const data = await res.json().catch(() => null);
+        toast.error(data?.error || 'Submission failed');
       }
     } catch {
       toast.error('Network error');
@@ -227,6 +239,34 @@ export function DonationForm({ donorArea }: { donorArea?: string }) {
                         placeholder="e.g. Mixed Breads, Pastries"
                         className="bg-fb-surface-container-low border-fb-outline-variant/5 rounded-2xl h-14 font-bold"
                       />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black text-fb-on-surface-variant uppercase tracking-widest opacity-40 ml-1">Cooked/Prepared Date</Label>
+                      <Input
+                        type="date"
+                        value={form.preparedDate}
+                        onChange={(e) => update('preparedDate', e.target.value)}
+                        required
+                        className="bg-fb-surface-container-low border-fb-outline-variant/5 rounded-2xl h-14 font-bold"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] font-black text-fb-on-surface-variant uppercase tracking-widest opacity-40 ml-1">Cooked/Prepared Time</Label>
+                      <Select value={form.preparedTime} onValueChange={(v) => update('preparedTime', v)}>
+                        <SelectTrigger className="bg-fb-surface-container-low border-fb-outline-variant/5 rounded-2xl h-14 font-bold">
+                          <SelectValue placeholder="Select Time" />
+                        </SelectTrigger>
+                        <SelectContent className="rounded-[1.5rem] shadow-ambient-4 max-h-[320px] p-2 border-fb-outline-variant/10">
+                          {timeOptions.map((opt) => (
+                            <SelectItem key={opt.value} value={opt.value} className="rounded-xl px-4 py-3 text-[11px] font-black uppercase tracking-widest focus:bg-fb-primary/5 focus:text-fb-primary transition-colors cursor-pointer">
+                              {opt.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
@@ -399,7 +439,7 @@ export function DonationForm({ donorArea }: { donorArea?: string }) {
 
           <Button
             type="submit"
-            disabled={loading || !form.title || !form.category || !form.quantity}
+            disabled={loading || !form.title || !form.category || !form.quantity || !form.preparedDate || !form.preparedTime}
             className="w-full h-18 rounded-[2rem] bg-[#0f5238] hover:bg-[#1b4332] text-white font-black uppercase tracking-[0.2em] shadow-ambient-3 hover:translate-y-[-2px] transition-all group"
           >
             {loading ? (

@@ -29,6 +29,7 @@ import { StatusBadge } from '@/components/shared/status-badge';
 import { Donation, AnalyticsSnapshot } from '@/types';
 import { toast } from 'sonner';
 import { uploadDonationPhoto } from '@/lib/photo-upload';
+import { combineLocalDateAndTime, splitISOToLocalDateTime, validatePreparedAt } from '@/lib/food-safety';
 import {
   Package,
   Utensils,
@@ -92,20 +93,38 @@ const isoToTime = (value: string) => value?.slice(11, 16) || '';
 
 const statusOrder = ['open', 'accepted', 'pickup_assigned', 'picked_up', 'in_transit', 'delivered', 'cancelled'];
 
-const createEditForm = (donation: Donation) => ({
-  title: donation.title,
-  category: donation.category,
-  foodType: donation.foodType,
-  quantity: String(donation.quantity),
-  unit: donation.unit,
-  urgency: donation.urgency,
-  locationName: donation.locationName,
-  pickupStart: isoToTime(donation.pickupStart),
-  pickupEnd: isoToTime(donation.pickupEnd),
-  notes: donation.notes,
-  isVegetarian: donation.isVegetarian,
-  photoUrl: donation.photoUrl || '',
+const timeOptions = Array.from({ length: 96 }, (_, i) => {
+  const hour = Math.floor(i / 4);
+  const minute = (i % 4) * 15;
+  const h24 = hour.toString().padStart(2, '0');
+  const m = minute.toString().padStart(2, '0');
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const h12 = (hour % 12 || 12).toString().padStart(2, '0');
+  return {
+    value: `${h24}:${m}`,
+    label: `${h12}:${m} ${period}`,
+  };
 });
+
+const createEditForm = (donation: Donation) => {
+  const prepared = splitISOToLocalDateTime(donation.preparedAt);
+  return {
+    title: donation.title,
+    category: donation.category,
+    foodType: donation.foodType,
+    preparedDate: prepared.date,
+    preparedTime: prepared.time,
+    quantity: String(donation.quantity),
+    unit: donation.unit,
+    urgency: donation.urgency,
+    locationName: donation.locationName,
+    pickupStart: isoToTime(donation.pickupStart),
+    pickupEnd: isoToTime(donation.pickupEnd),
+    notes: donation.notes,
+    isVegetarian: donation.isVegetarian,
+    photoUrl: donation.photoUrl || '',
+  };
+};
 
 const KPICard = ({ 
   label, 
@@ -200,6 +219,13 @@ export function DonorOverview({ stats, recentDonations, analytics = [], donorNam
 
   const handleSaveEdit = async () => {
     if (!editingDonation || !editForm) return;
+    const preparedAt = combineLocalDateAndTime(editForm.preparedDate, editForm.preparedTime);
+    const preparedValidation = validatePreparedAt(preparedAt);
+    if (!preparedValidation.ok) {
+      toast.error(preparedValidation.error);
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -228,6 +254,7 @@ export function DonorOverview({ stats, recentDonations, analytics = [], donorNam
           donationId: editingDonation.id,
           donation: {
             ...editForm,
+            preparedAt,
             photoUrl,
             quantity: Number(editForm.quantity),
           },
@@ -547,6 +574,25 @@ export function DonorOverview({ stats, recentDonations, analytics = [], donorNam
               </div>
 
               <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-fb-on-surface-variant/60">Cooked/Prepared Date</Label>
+                <Input type="date" value={editForm.preparedDate} onChange={(e) => updateEditForm('preparedDate', e.target.value)} className="h-12 rounded-2xl bg-fb-surface-container-low font-bold" />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-fb-on-surface-variant/60">Cooked/Prepared Time</Label>
+                <Select value={editForm.preparedTime} onValueChange={(value) => updateEditForm('preparedTime', value)}>
+                  <SelectTrigger className="h-12 rounded-2xl bg-fb-surface-container-low font-bold">
+                    <SelectValue placeholder="Select time" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-2xl max-h-[320px]">
+                    {timeOptions.map((time) => (
+                      <SelectItem key={time.value} value={time.value}>{time.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-fb-on-surface-variant/60">Quantity</Label>
                 <Input type="number" min={1} value={editForm.quantity} onChange={(e) => updateEditForm('quantity', e.target.value)} className="h-12 rounded-2xl bg-fb-surface-container-low font-bold" />
               </div>
@@ -641,7 +687,7 @@ export function DonorOverview({ stats, recentDonations, analytics = [], donorNam
             }} disabled={saving}>
               Cancel
             </Button>
-            <Button className="h-11 rounded-2xl bg-fb-primary px-6 text-white" onClick={handleSaveEdit} disabled={saving || !editForm?.title || !editForm?.quantity}>
+            <Button className="h-11 rounded-2xl bg-fb-primary px-6 text-white" onClick={handleSaveEdit} disabled={saving || !editForm?.title || !editForm?.quantity || !editForm?.preparedDate || !editForm?.preparedTime}>
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Changes'}
             </Button>
           </DialogFooter>

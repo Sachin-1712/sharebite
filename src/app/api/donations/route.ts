@@ -21,6 +21,7 @@ import {
   deleteDonationCascade,
 } from '@/lib/store';
 import { DeliveryJob, Donation } from '@/types';
+import { validatePreparedAt } from '@/lib/food-safety';
 
 const donorEditableStatuses: Donation['status'][] = ['open', 'accepted', 'pickup_assigned'];
 
@@ -41,6 +42,12 @@ const timeToISO = (timeStr: string | undefined, fallbackISO?: string, hoursOffse
   const base = fallbackISO ? new Date(fallbackISO) : new Date();
   base.setHours(hours, minutes, 0, 0);
   return base.toISOString();
+};
+
+const preparedToISO = (value: string | undefined, fallbackISO?: string) => {
+  if (!value) return fallbackISO || '';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
 };
 
 export async function GET(request: NextRequest) {
@@ -105,6 +112,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Only donors can create donations' }, { status: 403 });
     }
 
+    const preparedAt = preparedToISO(body.donation.preparedAt);
+    const preparedValidation = validatePreparedAt(preparedAt);
+    if (!preparedValidation.ok) {
+      return NextResponse.json({ error: preparedValidation.error }, { status: 400 });
+    }
+
     const donation: Donation = {
       id: body.donation.id || crypto.randomUUID(),
       donorId: user.id,
@@ -114,7 +127,7 @@ export async function POST(request: NextRequest) {
       quantity: Number(body.donation.quantity),
       unit: body.donation.unit,
       urgency: body.donation.urgency,
-      preparedAt: timeToISO(body.donation.preparedAt),
+      preparedAt,
       expiresAt: timeToISO(body.donation.expiresAt, undefined, 6), // Default 6h if missing
       pickupStart: timeToISO(body.donation.pickupStart),
       pickupEnd: timeToISO(body.donation.pickupEnd, undefined, 3),   // Default 3h if missing
@@ -231,10 +244,17 @@ export async function PATCH(request: NextRequest) {
     );
   }
 
+  const preparedAt = preparedToISO(body.donation.preparedAt, donation.preparedAt);
+  const preparedValidation = validatePreparedAt(preparedAt);
+  if (!preparedValidation.ok) {
+    return NextResponse.json({ error: preparedValidation.error }, { status: 400 });
+  }
+
   const edited = await updateDonationDetails(donation.id, {
     title: body.donation.title,
     category: body.donation.category,
     foodType: body.donation.foodType,
+    preparedAt,
     quantity: Number(body.donation.quantity),
     unit: body.donation.unit,
     urgency: body.donation.urgency,

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { validatePreparedAt } from '@/lib/food-safety';
 import {
   X,
   Sparkles,
@@ -27,6 +28,7 @@ interface Message {
 type WizardStep =
   | 'title'
   | 'food'
+  | 'prepared'
   | 'quantity'
   | 'location'
   | 'window'
@@ -39,6 +41,7 @@ type DonationDraft = {
   title?: string;
   category?: FoodCategory;
   foodType?: string;
+  preparedAt?: string;
   quantity?: number;
   unit?: string;
   locationName?: string;
@@ -141,6 +144,42 @@ const parseQuantity = (text: string) => {
   };
 };
 
+const parsePreparedAt = (text: string) => {
+  const now = new Date();
+  const lower = text.toLowerCase().trim();
+  const hoursAgo = lower.match(/(\d+(?:\.\d+)?)\s*(?:hour|hr|hrs|hours)\s*ago/);
+  const daysAgo = lower.match(/(\d+(?:\.\d+)?)\s*(?:day|days)\s*ago/);
+
+  if (lower === 'now' || lower.includes('just now')) {
+    return now.toISOString();
+  }
+
+  if (hoursAgo) {
+    return new Date(now.getTime() - Number(hoursAgo[1]) * 3600000).toISOString();
+  }
+
+  if (daysAgo) {
+    return new Date(now.getTime() - Number(daysAgo[1]) * 86400000).toISOString();
+  }
+
+  const explicit = lower.match(/(?:(today|yesterday)\s*)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/);
+  if (explicit) {
+    let hour = Number(explicit[2]);
+    const minutes = Number(explicit[3] || 0);
+    const meridiem = explicit[4];
+    if (meridiem === 'pm' && hour < 12) hour += 12;
+    if (meridiem === 'am' && hour === 12) hour = 0;
+
+    const date = new Date(now);
+    if (explicit[1] === 'yesterday') date.setDate(date.getDate() - 1);
+    date.setHours(hour, minutes, 0, 0);
+    return date.toISOString();
+  }
+
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? '' : date.toISOString();
+};
+
 const parsePickupWindow = (text: string) => {
   const now = new Date();
   const lower = text.toLowerCase();
@@ -210,6 +249,7 @@ const summarizeDraft = (draft: DonationDraft) => (
   `Donation summary:\n` +
   `Title: ${draft.title}\n` +
   `Food: ${draft.foodType} (${draft.category?.replace('_', ' ')})\n` +
+  `Cooked/prepared: ${draft.preparedAt ? new Date(draft.preparedAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'Not set'}\n` +
   `Quantity: ${draft.quantity} ${draft.unit}\n` +
   `Pickup: ${draft.locationName}\n` +
   `Window: ${formatWindow(draft.pickupStart, draft.pickupEnd)}\n` +
@@ -267,7 +307,7 @@ export function ChatPanel({ onClose, userRole }: { onClose: () => void; userRole
             quantity: draft.quantity,
             unit: draft.unit,
             urgency: draft.urgency,
-            preparedAt: new Date().toISOString(),
+            preparedAt: draft.preparedAt,
             expiresAt,
             pickupStart: draft.pickupStart,
             pickupEnd: draft.pickupEnd,
@@ -317,6 +357,19 @@ export function ChatPanel({ onClose, userRole }: { onClose: () => void; userRole
 
     if (wizard.step === 'food') {
       Object.assign(draft, parseFood(text));
+      setWizard({ active: true, step: 'prepared', draft });
+      addAssistantMessage('When was the food cooked/prepared? Example: "now", "2 hours ago", or "today 10:30". Food older than 24 hours cannot be donated.');
+      return;
+    }
+
+    if (wizard.step === 'prepared') {
+      const preparedAt = parsePreparedAt(text);
+      const preparedValidation = validatePreparedAt(preparedAt);
+      if (!preparedValidation.ok) {
+        addAssistantMessage(preparedValidation.error || 'Please enter a valid cooked/prepared time.');
+        return;
+      }
+      draft.preparedAt = preparedAt;
       setWizard({ active: true, step: 'quantity', draft });
       addAssistantMessage('How much food is available? Example: "35 boxes", "18 items", or "22 cups".');
       return;

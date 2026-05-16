@@ -84,6 +84,8 @@ This is the location shown in NGO Analytics for the demo NGO context.
 
 ## Seeded Donations
 
+All seeded `prepared_at` values are kept within the 24-hour food safety window so demo rows remain valid under Feature 1 validation.
+
 - `35 Veg Biryani Meal Boxes` from Koramangala Kitchen: `open`, urgent
 - `18 Assorted Pastries` from Indiranagar Bakery House: `open`, medium
 - `22 Fruit Salad Cups` from HSR Fresh Foods: `open`, low

@@ -414,6 +414,36 @@ Verification:
 - In-app browser check confirmed `View All Partners` opens and lists real donors including Koramangala Kitchen, Indiranagar Bakery House, Whitefield Tech Park Canteen, HSR Fresh Foods, Jayanagar Event Caterers, and Malleshwaram Tiffin Centre.
 - `npm run build` passed.
 
+## Feature 1 Complete: Prepared-Time Food Safety Validation
+
+Donors must now enter when food was cooked/prepared before creating or editing a donation.
+
+Changes:
+
+- Reused the existing Supabase `donations.prepared_at` field.
+- Added required cooked/prepared date and 15-minute time selection to the donor create form.
+- Added cooked/prepared date and 15-minute time selection to the donor edit dialog.
+- Added a cooked/prepared step to the donor Sharebite AI donation wizard.
+- Added shared validation that blocks:
+  - prepared times more than 24 hours old
+  - prepared times in the future
+  - missing/invalid prepared times
+- Added backend validation in `/api/donations` for create and edit so the UI cannot be bypassed.
+- Updated demo seed rows so all seeded `prepared_at` values are within the 24-hour safety window.
+
+Verification:
+
+- Supabase connectivity after resume was confirmed by querying `donations` and `donor@sharebite.demo`.
+- `npm run seed:demo` passed.
+- Creating a donation cooked 2 days ago returned `400` with `For safety, food cooked more than 24 hours ago cannot be donated.`
+- Creating a donation with a future prepared time returned `400`.
+- Creating a donation cooked today returned `200`.
+- Editing a donation to a 2-day-old prepared time returned `400`.
+- Chat-wizard-equivalent donation creation with a valid prepared time returned `200`.
+- Reseeded after tests to remove temporary safety-test rows.
+- Verified seeded demo donations have no `prepared_at` rows older than 24 hours.
+- `npm run build` passed.
+
 ## Known Remaining Issues
 
 - `npm run lint` still has pre-existing lint failures and was not made a Phase 1 blocker.
