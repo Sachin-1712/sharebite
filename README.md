@@ -2,7 +2,8 @@
 
 Sharebite is a professional, full-stack platform designed to bridge the gap between food donors (restaurants, grocery stores) and NGOs to minimize food waste and support local communities.
 
-![Sharebite Banner](public/banner.png) *Note: Replace with actual screenshot*
+![Sharebite Banner](<img width="139" height="51" alt="image" src="https://github.com/user-attachments/assets/0ff9ae4e-783b-41cb-a2c7-e2e80e05e5e7" />)
+
 
 ## 🚀 Overview
 
